@@ -7,6 +7,7 @@ import {
   Upload,
   Trophy,
   Trash2,
+  Layers,
 } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { getCurrentProfile, signOut } from './lib/auth';
@@ -28,6 +29,13 @@ type Player = {
   }[];
 };
 
+type Deck = {
+  id: string;
+  name: string;
+  player_id: string;
+  game_id: string | null;
+};
+
 type Tournament = {
   id: string;
   name: string;
@@ -44,6 +52,15 @@ type Tournament = {
   game: Game | null;
 };
 
+type TournamentParticipant = {
+  id: string;
+  tournament_id: string;
+  player_id: string;
+  deck_id: string | null;
+  player: Player | null;
+  deck: Deck | null;
+};
+
 type Profile = {
   id: string;
   player_id: string | null;
@@ -55,7 +72,9 @@ type AdminPanelProps = {
   onLogout: () => void;
 };
 
-export default function AdminPanel({ onLogout }: AdminPanelProps) {
+export default function AdminPanel({
+  onLogout,
+}: AdminPanelProps) {
   const [players, setPlayers] = useState<Player[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
@@ -130,6 +149,45 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
   const [tournamentImagePreview, setTournamentImagePreview] =
     useState<string | null>(null);
+
+  /*
+   * =========================
+   * PARTICIPANTES
+   * =========================
+   */
+
+  const [showParticipants, setShowParticipants] =
+    useState(false);
+
+  const [selectedTournament, setSelectedTournament] =
+    useState<Tournament | null>(null);
+
+  const [participants, setParticipants] =
+    useState<TournamentParticipant[]>([]);
+
+  const [loadingParticipants, setLoadingParticipants] =
+    useState(false);
+
+  const [showParticipantForm, setShowParticipantForm] =
+    useState(false);
+
+  const [savingParticipant, setSavingParticipant] =
+    useState(false);
+
+  const [editingParticipant, setEditingParticipant] =
+    useState<TournamentParticipant | null>(null);
+
+  const [participantPlayerId, setParticipantPlayerId] =
+    useState('');
+
+  const [participantDeckId, setParticipantDeckId] =
+    useState('');
+
+  const [playerDecks, setPlayerDecks] =
+    useState<Deck[]>([]);
+
+  const [loadingDecks, setLoadingDecks] =
+    useState(false);
 
   useEffect(() => {
     checkAccess();
@@ -208,8 +266,21 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       return;
     }
 
+    const normalized = (data || []).map(
+      (player: any) => ({
+        ...player,
+        player_games: (player.player_games || []).map(
+          (item: any) => ({
+            game: Array.isArray(item.game)
+              ? item.game[0] || null
+              : item.game || null,
+          })
+        ),
+      })
+    );
+
     setPlayers(
-      (data as unknown as Player[]) || []
+      normalized as Player[]
     );
   }
 
@@ -244,7 +315,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
    */
 
   async function loadTournaments() {
-    let query = supabase
+    const query = supabase
       .from('tournaments')
       .select(`
         id,
@@ -267,15 +338,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
       .order('tournament_date', {
         ascending: false,
       });
-
-    /*
-     * Admin pode receber todos.
-     * Jogador receberá:
-     * - próprios torneios
-     * - torneios aprovados
-     *
-     * A própria RLS do Supabase também protege isso.
-     */
 
     const { data, error } = await query;
 
@@ -1260,14 +1322,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
           );
       }
 
-      /*
-       * Se for jogador editando:
-       * volta para pending para nova aprovação.
-       *
-       * Se for admin:
-       * mantém o status escolhido.
-       */
-
       const nextStatus =
         isAdmin
           ? tournamentStatus
@@ -1396,6 +1450,518 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     }
 
     await loadTournaments();
+  }
+
+  /*
+   * =========================
+   * PARTICIPANTES - LOAD
+   * =========================
+   */
+
+  async function loadParticipants(
+    tournamentId: string
+  ) {
+    setLoadingParticipants(true);
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('tournament_players')
+      .select(`
+        id,
+        tournament_id,
+        player_id,
+        deck_id,
+        player:players (
+          id,
+          name,
+          slug,
+          photo_url,
+          bio,
+          active
+        ),
+        deck:decks (
+          id,
+          name,
+          player_id,
+          game_id
+        )
+      `)
+      .eq(
+        'tournament_id',
+        tournamentId
+      );
+
+    if (error) {
+      console.error(
+        'Erro ao carregar participantes:',
+        error
+      );
+
+      alert(
+        error.message
+      );
+
+      setParticipants([]);
+      setLoadingParticipants(false);
+
+      return;
+    }
+
+    const normalized =
+      (data || []).map(
+        (item: any) => ({
+          ...item,
+
+          player:
+            Array.isArray(
+              item.player
+            )
+              ? item.player[0] ||
+                null
+              : item.player ||
+                null,
+
+          deck:
+            Array.isArray(
+              item.deck
+            )
+              ? item.deck[0] ||
+                null
+              : item.deck ||
+                null,
+        })
+      );
+
+    setParticipants(
+      normalized as TournamentParticipant[]
+    );
+
+    setLoadingParticipants(false);
+  }
+
+  /*
+   * =========================
+   * ABRIR PARTICIPANTES
+   * =========================
+   */
+
+  async function openParticipants(
+    tournament: Tournament
+  ) {
+    setSelectedTournament(
+      tournament
+    );
+
+    setShowParticipants(true);
+
+    setShowParticipantForm(false);
+    setEditingParticipant(null);
+
+    await loadParticipants(
+      tournament.id
+    );
+  }
+
+  /*
+   * =========================
+   * FECHAR PARTICIPANTES
+   * =========================
+   */
+
+  function closeParticipants() {
+    if (savingParticipant) {
+      return;
+    }
+
+    setShowParticipants(false);
+    setSelectedTournament(null);
+    setParticipants([]);
+    setShowParticipantForm(false);
+    setEditingParticipant(null);
+    setParticipantPlayerId('');
+    setParticipantDeckId('');
+    setPlayerDecks([]);
+  }
+
+  /*
+   * =========================
+   * DECKS - LOAD
+   * =========================
+   */
+
+  async function loadPlayerDecks(
+    playerId: string
+  ) {
+    if (!playerId) {
+      setPlayerDecks([]);
+      return;
+    }
+
+    setLoadingDecks(true);
+
+    const {
+      data,
+      error,
+    } = await supabase
+      .from('decks')
+      .select(`
+        id,
+        name,
+        player_id,
+        game_id
+      `)
+      .eq(
+        'player_id',
+        playerId
+      )
+      .order(
+        'name'
+      );
+
+    if (error) {
+      console.error(
+        'Erro ao carregar decks:',
+        error
+      );
+
+      setPlayerDecks([]);
+      setLoadingDecks(false);
+
+      return;
+    }
+
+    setPlayerDecks(
+      (data || []) as Deck[]
+    );
+
+    setLoadingDecks(false);
+  }
+
+  /*
+   * =========================
+   * NOVO PARTICIPANTE
+   * =========================
+   */
+
+  function resetParticipantForm() {
+    setEditingParticipant(null);
+    setParticipantPlayerId('');
+    setParticipantDeckId('');
+    setPlayerDecks([]);
+  }
+
+  function openNewParticipantForm() {
+    resetParticipantForm();
+
+    if (
+      !isAdmin &&
+      currentProfile?.player_id
+    ) {
+      setParticipantPlayerId(
+        currentProfile.player_id
+      );
+
+      loadPlayerDecks(
+        currentProfile.player_id
+      );
+    }
+
+    setShowParticipantForm(true);
+  }
+
+  /*
+   * =========================
+   * EDITAR PARTICIPANTE
+   * =========================
+   */
+
+  function openEditParticipantForm(
+    participant: TournamentParticipant
+  ) {
+    setEditingParticipant(
+      participant
+    );
+
+    setParticipantPlayerId(
+      participant.player_id
+    );
+
+    setParticipantDeckId(
+      participant.deck_id ||
+        ''
+    );
+
+    loadPlayerDecks(
+      participant.player_id
+    );
+
+    setShowParticipantForm(true);
+  }
+
+  /*
+   * =========================
+   * JOGADOR ALTERADO
+   * =========================
+   */
+
+  async function handleParticipantPlayerChange(
+    playerId: string
+  ) {
+    setParticipantPlayerId(
+      playerId
+    );
+
+    setParticipantDeckId('');
+
+    await loadPlayerDecks(
+      playerId
+    );
+  }
+
+  /*
+   * =========================
+   * SALVAR PARTICIPANTE
+   * =========================
+   */
+
+  async function handleSaveParticipant() {
+    if (!selectedTournament) {
+      return;
+    }
+
+    if (!participantPlayerId) {
+      alert(
+        'Selecione o jogador.'
+      );
+
+      return;
+    }
+
+    if (!participantDeckId) {
+      alert(
+        'Selecione o deck usado no torneio.'
+      );
+
+      return;
+    }
+
+    setSavingParticipant(true);
+
+    try {
+      /*
+       * Jogador comum só pode
+       * cadastrar o próprio jogador.
+       */
+
+      if (
+        !isAdmin &&
+        currentProfile?.player_id !==
+          participantPlayerId
+      ) {
+        alert(
+          'Você só pode adicionar o seu próprio jogador.'
+        );
+
+        return;
+      }
+
+      /*
+       * Verifica se o jogador
+       * já está no torneio.
+       */
+
+      const existingQuery =
+        await supabase
+          .from(
+            'tournament_players'
+          )
+          .select('id')
+          .eq(
+            'tournament_id',
+            selectedTournament.id
+          )
+          .eq(
+            'player_id',
+            participantPlayerId
+          )
+          .maybeSingle();
+
+      if (
+        existingQuery.error
+      ) {
+        console.error(
+          'Erro ao verificar participante:',
+          existingQuery.error
+        );
+
+        alert(
+          existingQuery.error.message
+        );
+
+        return;
+      }
+
+      if (
+        existingQuery.data &&
+        (!editingParticipant ||
+          existingQuery.data.id !==
+            editingParticipant.id)
+      ) {
+        alert(
+          'Este jogador já está cadastrado neste torneio.'
+        );
+
+        return;
+      }
+
+      if (editingParticipant) {
+        const {
+          error,
+        } = await supabase
+          .from(
+            'tournament_players'
+          )
+          .update({
+            player_id:
+              participantPlayerId,
+
+            deck_id:
+              participantDeckId,
+          })
+          .eq(
+            'id',
+            editingParticipant.id
+          );
+
+        if (error) {
+          console.error(
+            'Erro ao atualizar participante:',
+            error
+          );
+
+          alert(
+            error.message
+          );
+
+          return;
+        }
+      } else {
+        const {
+          error,
+        } = await supabase
+          .from(
+            'tournament_players'
+          )
+          .insert({
+            tournament_id:
+              selectedTournament.id,
+
+            player_id:
+              participantPlayerId,
+
+            deck_id:
+              participantDeckId,
+          });
+
+        if (error) {
+          console.error(
+            'Erro ao adicionar participante:',
+            error
+          );
+
+          alert(
+            error.message
+          );
+
+          return;
+        }
+      }
+
+      await loadParticipants(
+        selectedTournament.id
+      );
+
+      setShowParticipantForm(
+        false
+      );
+
+      resetParticipantForm();
+
+      alert(
+        editingParticipant
+          ? 'Participante atualizado.'
+          : 'Participante adicionado ao torneio.'
+      );
+    } catch (error) {
+      console.error(
+        'Erro inesperado:',
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Ocorreu um erro ao salvar o participante.'
+      );
+    } finally {
+      setSavingParticipant(false);
+    }
+  }
+
+  /*
+   * =========================
+   * EXCLUIR PARTICIPANTE
+   * =========================
+   */
+
+  async function handleDeleteParticipant(
+    participant: TournamentParticipant
+  ) {
+    if (!isAdmin) {
+      return;
+    }
+
+    const confirmed =
+      window.confirm(
+        `Remover ${participant.player?.name || 'este jogador'} do torneio?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const {
+      error,
+    } = await supabase
+      .from(
+        'tournament_players'
+      )
+      .delete()
+      .eq(
+        'id',
+        participant.id
+      );
+
+    if (error) {
+      console.error(
+        'Erro ao remover participante:',
+        error
+      );
+
+      alert(
+        error.message
+      );
+
+      return;
+    }
+
+    if (selectedTournament) {
+      await loadParticipants(
+        selectedTournament.id
+      );
+    }
   }
 
   /*
@@ -1832,7 +2398,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
             <div className="border border-neutral-900 overflow-hidden">
 
-              <div className="grid grid-cols-[1fr_160px_140px_120px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
+              <div className="grid grid-cols-[1fr_160px_140px_170px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
                 <span>
                   Torneio
                 </span>
@@ -1856,7 +2422,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                     key={
                       tournament.id
                     }
-                    className="grid grid-cols-[1fr_160px_140px_120px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
+                    className="grid grid-cols-[1fr_160px_140px_170px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
                   >
 
                     <div className="flex items-center gap-4 min-w-0">
@@ -1926,6 +2492,18 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                       </span>
 
                       <div className="flex items-center gap-2">
+
+                        <button
+                          onClick={() =>
+                            openParticipants(
+                              tournament
+                            )
+                          }
+                          className="text-neutral-500 hover:text-white"
+                          title="Participantes"
+                        >
+                          <Users size={15} />
+                        </button>
 
                         <button
                           onClick={() =>
@@ -2333,8 +2911,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
             <div className="p-6 space-y-6">
 
-              {/* IMAGEM */}
-
               <div>
 
                 <label className="block text-sm text-neutral-400 mb-3">
@@ -2394,8 +2970,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
               </div>
 
-              {/* NOME */}
-
               <div>
 
                 <label className="block text-sm text-neutral-400 mb-2">
@@ -2420,8 +2994,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 />
 
               </div>
-
-              {/* JOGO */}
 
               <div>
 
@@ -2469,8 +3041,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
               </div>
 
-              {/* DATA */}
-
               <div>
 
                 <label className="block text-sm text-neutral-400 mb-2">
@@ -2494,8 +3064,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 />
 
               </div>
-
-              {/* LOCAL */}
 
               <div>
 
@@ -2522,8 +3090,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
               </div>
 
-              {/* DESCRIÇÃO */}
-
               <div>
 
                 <label className="block text-sm text-neutral-400 mb-2">
@@ -2548,8 +3114,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
                 />
 
               </div>
-
-              {/* STATUS - SOMENTE ADMIN */}
 
               {isAdmin && (
                 <div>
@@ -2589,8 +3153,6 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
                 </div>
               )}
-
-              {/* AVISO JOGADOR */}
 
               {!isAdmin && (
                 <div className="border border-yellow-900/40 bg-yellow-950/20 px-4 py-4">
@@ -2650,6 +3212,471 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
         </div>
       )}
+
+      {/* =========================
+          PARTICIPANTES
+      ========================= */}
+
+      {showParticipants &&
+        selectedTournament && (
+          <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center px-4 py-8">
+
+            <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto bg-neutral-950 border border-neutral-800">
+
+              {/* HEADER */}
+
+              <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-900">
+
+                <div>
+
+                  <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                    Torneio
+                  </p>
+
+                  <h3 className="text-xl font-semibold text-white mt-1">
+                    {selectedTournament.name}
+                  </h3>
+
+                  <p className="text-xs text-neutral-600 mt-2">
+                    Participantes e decks usados
+                  </p>
+
+                </div>
+
+                <button
+                  onClick={
+                    closeParticipants
+                  }
+                  className="text-neutral-500 hover:text-white"
+                >
+                  <X size={20} />
+                </button>
+
+              </div>
+
+              {/* CONTEÚDO */}
+
+              <div className="p-6">
+
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+
+                  <div>
+
+                    <p className="text-sm text-white">
+                      Participantes
+                    </p>
+
+                    <p className="text-xs text-neutral-600 mt-1">
+                      Registre somente os jogadores da Torega que participaram.
+                    </p>
+
+                  </div>
+
+                  <button
+                    onClick={
+                      openNewParticipantForm
+                    }
+                    className="inline-flex items-center justify-center gap-2 bg-white text-black px-4 py-3 text-sm font-semibold hover:bg-neutral-200"
+                  >
+                    <Plus size={16} />
+                    Adicionar jogador
+                  </button>
+
+                </div>
+
+                {loadingParticipants ? (
+                  <div className="py-16 text-center text-neutral-600">
+                    Carregando participantes...
+                  </div>
+                ) : participants.length === 0 ? (
+                  <div className="border border-neutral-900 py-16 text-center">
+
+                    <Users
+                      size={28}
+                      className="mx-auto text-neutral-700"
+                    />
+
+                    <p className="text-neutral-500 mt-4">
+                      Nenhum jogador adicionado.
+                    </p>
+
+                    <p className="text-xs text-neutral-700 mt-2">
+                      Adicione os jogadores da Torega que participaram deste torneio.
+                    </p>
+
+                  </div>
+                ) : (
+                  <div className="border border-neutral-900 overflow-hidden">
+
+                    <div className="grid grid-cols-[1fr_1fr_100px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
+                      <span>
+                        Jogador
+                      </span>
+
+                      <span>
+                        Deck usado
+                      </span>
+
+                      <span>
+                        Ações
+                      </span>
+                    </div>
+
+                    {participants.map(
+                      (participant) => (
+                        <div
+                          key={
+                            participant.id
+                          }
+                          className="grid grid-cols-[1fr_1fr_100px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
+                        >
+
+                          <div className="flex items-center gap-4">
+
+                            {participant.player?.photo_url ? (
+                              <img
+                                src={
+                                  participant.player.photo_url
+                                }
+                                alt={
+                                  participant.player.name
+                                }
+                                className="w-10 h-10 rounded-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-10 h-10 rounded-full bg-neutral-900 border border-neutral-800 flex items-center justify-center">
+                                <Users
+                                  size={16}
+                                  className="text-neutral-600"
+                                />
+                              </div>
+                            )}
+
+                            <div>
+
+                              <p className="text-sm font-semibold text-white">
+                                {
+                                  participant.player?.name ||
+                                  'Jogador'
+                                }
+                              </p>
+
+                              <p className="text-xs text-neutral-600 mt-1">
+                                Participante
+                              </p>
+
+                            </div>
+
+                          </div>
+
+                          <div className="flex items-center gap-2">
+
+                            <Layers
+                              size={15}
+                              className="text-neutral-600"
+                            />
+
+                            <span className="text-sm text-neutral-400">
+                              {
+                                participant.deck?.name ||
+                                'Nenhum deck'
+                              }
+                            </span>
+
+                          </div>
+
+                          <div className="flex items-center gap-3">
+
+                            <button
+                              onClick={() =>
+                                openEditParticipantForm(
+                                  participant
+                                )
+                              }
+                              className="text-neutral-500 hover:text-white"
+                              title="Editar participante"
+                            >
+                              <Pencil size={15} />
+                            </button>
+
+                            {isAdmin && (
+                              <button
+                                onClick={() =>
+                                  handleDeleteParticipant(
+                                    participant
+                                  )
+                                }
+                                className="text-neutral-600 hover:text-red-400"
+                                title="Remover participante"
+                              >
+                                <Trash2 size={15} />
+                              </button>
+                            )}
+
+                          </div>
+
+                        </div>
+                      )
+                    )}
+
+                  </div>
+                )}
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+      {/* =========================
+          FORMULÁRIO PARTICIPANTE
+      ========================= */}
+
+      {showParticipantForm &&
+        selectedTournament && (
+          <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center px-4 py-8">
+
+            <div className="w-full max-w-xl bg-neutral-950 border border-neutral-800">
+
+              <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-900">
+
+                <div>
+
+                  <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                    Participante
+                  </p>
+
+                  <h3 className="text-xl font-semibold text-white mt-1">
+                    {editingParticipant
+                      ? 'Editar participante'
+                      : 'Adicionar jogador'}
+                  </h3>
+
+                </div>
+
+                <button
+                  onClick={() => {
+                    if (
+                      savingParticipant
+                    ) {
+                      return;
+                    }
+
+                    setShowParticipantForm(
+                      false
+                    );
+
+                    resetParticipantForm();
+                  }}
+                  disabled={
+                    savingParticipant
+                  }
+                  className="text-neutral-500 hover:text-white disabled:opacity-50"
+                >
+                  <X size={20} />
+                </button>
+
+              </div>
+
+              <div className="p-6 space-y-6">
+
+                {/* JOGADOR */}
+
+                <div>
+
+                  <label className="block text-sm text-neutral-400 mb-2">
+                    Jogador
+                  </label>
+
+                  {isAdmin ? (
+                    <select
+                      value={
+                        participantPlayerId
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        handleParticipantPlayerChange(
+                          event.target
+                            .value
+                        )
+                      }
+                      className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500"
+                    >
+
+                      <option value="">
+                        Selecione o jogador
+                      </option>
+
+                      {players
+                        .filter(
+                          (player) =>
+                            player.active
+                        )
+                        .map(
+                          (player) => (
+                            <option
+                              key={
+                                player.id
+                              }
+                              value={
+                                player.id
+                              }
+                            >
+                              {
+                                player.name
+                              }
+                            </option>
+                          )
+                        )}
+
+                    </select>
+                  ) : (
+                    <div className="w-full bg-black border border-neutral-800 px-4 py-3 text-white">
+
+                      {
+                        players.find(
+                          (player) =>
+                            player.id ===
+                            currentProfile?.player_id
+                        )?.name ||
+                        currentProfile?.display_name ||
+                        'Seu jogador'
+                      }
+
+                    </div>
+                  )}
+
+                </div>
+
+                {/* DECK */}
+
+                <div>
+
+                  <label className="block text-sm text-neutral-400 mb-2">
+                    Deck usado no torneio
+                  </label>
+
+                  <select
+                    value={
+                      participantDeckId
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setParticipantDeckId(
+                        event.target
+                          .value
+                      )
+                    }
+                    disabled={
+                      !participantPlayerId ||
+                      loadingDecks
+                    }
+                    className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500 disabled:opacity-50"
+                  >
+
+                    <option value="">
+                      {loadingDecks
+                        ? 'Carregando decks...'
+                        : 'Selecione o deck'}
+                    </option>
+
+                    {playerDecks.map(
+                      (deck) => (
+                        <option
+                          key={
+                            deck.id
+                          }
+                          value={
+                            deck.id
+                          }
+                        >
+                          {
+                            deck.name
+                          }
+                        </option>
+                      )
+                    )}
+
+                  </select>
+
+                  {!loadingDecks &&
+                    participantPlayerId &&
+                    playerDecks.length ===
+                      0 && (
+                      <p className="text-xs text-yellow-500 mt-2">
+                        Este jogador ainda não possui nenhum deck cadastrado.
+                      </p>
+                    )}
+
+                </div>
+
+                <div className="border border-neutral-900 bg-white/[0.02] px-4 py-4">
+
+                  <p className="text-sm text-white">
+                    {editingParticipant
+                      ? 'Atualizando participação'
+                      : 'Registrando participação'}
+                  </p>
+
+                  <p className="text-xs text-neutral-600 mt-1">
+                    O deck selecionado ficará registrado especificamente para este torneio.
+                  </p>
+
+                </div>
+
+              </div>
+
+              <div className="flex justify-end gap-3 px-6 py-5 border-t border-neutral-900">
+
+                <button
+                  onClick={() => {
+                    if (
+                      savingParticipant
+                    ) {
+                      return;
+                    }
+
+                    setShowParticipantForm(
+                      false
+                    );
+
+                    resetParticipantForm();
+                  }}
+                  disabled={
+                    savingParticipant
+                  }
+                  className="border border-neutral-800 px-5 py-3 text-sm text-neutral-400 hover:text-white hover:bg-white/5 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  onClick={
+                    handleSaveParticipant
+                  }
+                  disabled={
+                    savingParticipant ||
+                    !participantPlayerId ||
+                    !participantDeckId
+                  }
+                  className="bg-white text-black px-5 py-3 text-sm font-semibold hover:bg-neutral-200 disabled:opacity-50"
+                >
+                  {savingParticipant
+                    ? 'Salvando...'
+                    : editingParticipant
+                      ? 'Salvar alterações'
+                      : 'Adicionar participante'}
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
 
     </div>
   );
