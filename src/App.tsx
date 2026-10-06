@@ -1,4 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import AdminLogin from './AdminLogin';
+import { getCurrentUser, signOut } from './lib/auth';
+import AdminPanel from './AdminPanel';
 import { ChevronRight, Trophy, Swords, Calendar, History, Gamepad2, Users, Shield, ArrowLeft, Newspaper } from 'lucide-react';
 
 type View = 'home' | 'team' | 'playerDetails' | 'games' | 'tournaments' | 'history' | 'news';
@@ -22,7 +25,7 @@ const PLAYERS: Player[] = [
   { id: 'p7', name: 'Danilo Stepple', games: ['One Piece', 'Magic', 'Riftbound'], photo: '/players/danilo-stepple.jpg' },
   { id: 'p8', name: 'Vitor Hugo', games: ['One Piece', 'Riftbound', 'Magic'], photo: '/players/vitor-hugo.jpg' },
   { id: 'p9', name: 'Gustavo Silva', games: ['One Piece', 'Riftbound', 'Magic'], photo: '/players/gustavo-silva.jpg' },
-  { id: 'p10', name: 'Ricardo Padilha', games: ['One Piece', 'Riftbound', 'Magic', 'Pokémon'] },
+  { id: 'p10', name: 'Ricardo Padilha', games: ['One Piece', 'Riftbound', 'Magic', 'Pokémon'], photo: '/players/ricardo.jpeg'},
   { id: 'p11', name: 'Arthur Fernandes', games: ['One Piece'], photo: '/players/arthur-fernandes.jpg' },
   { id: 'p12', name: 'André Derp', games: ['One Piece', 'Riftbound', 'Magic'], photo: '/players/andre-derp.jpg' },
   { id: 'p13', name: 'Erick Melo', games: ['One Piece', 'Riftbound', 'Magic'], photo: '/players/erick.jpg' }
@@ -475,31 +478,113 @@ export default function App() {
   const [currentView, setCurrentView] = useState<View>('home');
   const [activePlayer, setActivePlayer] = useState<Player | null>(null);
 
-  // Scroll to top on view change
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [currentView]);
+  const [adminMode, setAdminMode] = useState(
+    window.location.pathname === '/admin'
+  );
 
+  const [user, setUser] = useState<any>(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
+
+  useEffect(() => {
+    async function checkAuth() {
+      const currentUser = await getCurrentUser();
+      setUser(currentUser);
+      setCheckingAuth(false);
+    }
+
+    checkAuth();
+  }, []);
+
+  // Área administrativa
+ if (adminMode) {
+  if (checkingAuth) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center">
+        <span className="text-sm text-neutral-500">
+          Carregando...
+        </span>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <AdminLogin
+        onLogin={async () => {
+          const currentUser = await getCurrentUser();
+          setUser(currentUser);
+        }}
+      />
+    );
+  }
+
+  return (
+    <AdminPanel
+      onLogout={() => {
+        setUser(null);
+      }}
+    />
+  );
+}
+
+  // Site público
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-orange-500/30">
       <Header currentView={currentView} setView={setCurrentView} />
-      
+
       <main className="min-h-[calc(100vh-160px)]">
-        {currentView === 'home' && <HomeView setView={setCurrentView} />}
-        {currentView === 'team' && <TeamView setView={setCurrentView} setActivePlayer={setActivePlayer} />}
-        {currentView === 'playerDetails' && <PlayerView player={activePlayer} setView={setCurrentView} />}
-        {currentView === 'games' && <GamesView setView={setCurrentView} setActivePlayer={setActivePlayer} />}
-        {currentView === 'tournaments' && <TournamentsView />}
-        {currentView === 'history' && <HistoryView />}
-        {currentView === 'news' && <NewsView />}
+        {currentView === 'home' && (
+          <HomeView setView={setCurrentView} />
+        )}
+
+        {currentView === 'team' && (
+          <TeamView
+            setView={setCurrentView}
+            setActivePlayer={setActivePlayer}
+          />
+        )}
+
+        {currentView === 'playerDetails' && (
+          <PlayerView
+            player={activePlayer}
+            setView={setCurrentView}
+          />
+        )}
+
+        {currentView === 'games' && (
+          <GamesView
+            setView={setCurrentView}
+            setActivePlayer={setActivePlayer}
+          />
+        )}
+
+        {currentView === 'tournaments' && (
+          <TournamentsView />
+        )}
+
+        {currentView === 'history' && (
+          <HistoryView />
+        )}
+
+        {currentView === 'news' && (
+          <NewsView />
+        )}
       </main>
 
       <footer className="border-t border-neutral-900 bg-neutral-950 py-8 mt-12">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
           <div className="flex items-center gap-2 opacity-50 grayscale">
-            <img src="/toregafoto.png" alt="Logo do Torega" className="w-8 h-8 rounded-full object-cover" />
-            <span className="font-black text-white tracking-widest uppercase text-sm">Torega TCG</span>
+            <img
+              src="/toregafoto.png"
+              alt="Logo do Torega"
+              className="w-8 h-8 rounded-full object-cover"
+            />
+
+            <span className="font-black text-white tracking-widest uppercase text-sm">
+              Torega TCG
+            </span>
           </div>
+
           <p className="text-neutral-600 text-sm font-bold uppercase tracking-wider">
             © {new Date().getFullYear()} Torega TCG. Forjado na Competição.
           </p>
