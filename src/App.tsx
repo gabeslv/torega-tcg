@@ -1,7 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronRight, Trophy, Swords, Calendar, History, Gamepad2, Users, Shield, ArrowLeft, Newspaper } from 'lucide-react';
 
-const PLAYERS = [
+type View = 'home' | 'team' | 'playerDetails' | 'games' | 'tournaments' | 'history' | 'news';
+
+type Player = {
+  id: string;
+  name: string;
+  games: string[];
+  photo?: string;
+};
+
+type IconComponent = React.ComponentType<{ className?: string }>;
+
+const PLAYERS: Player[] = [
   { id: 'p1', name: 'Gabriel Abreu', games: ['One Piece', 'Riftbound'], photo: '/players/gabriel-abreu.jpg' },
   { id: 'p2', name: 'Thiago Mavignier', games: ['One Piece', 'Riftbound', 'Magic'], photo: '/players/thiago-mavignier.jpg' },
   { id: 'p3', name: 'Gabriel Silva', games: ['One Piece', 'Riftbound', 'Pokémon'], photo: '/players/gabriel-silva.jpg' },
@@ -18,7 +29,7 @@ const PLAYERS = [
 ];
 const GAMES = ['Pokémon', 'One Piece', 'Riftbound', 'Magic'];
 
-const Header = ({ currentView, setView }) => {
+const Header = ({ currentView, setView }: { currentView: View; setView: React.Dispatch<React.SetStateAction<View>> }) => {
   const navItems = [
     { id: 'home', label: 'Início' },
     { id: 'team', label: 'Equipe' },
@@ -65,7 +76,7 @@ const Header = ({ currentView, setView }) => {
   );
 };
 
-const EmptyState = ({ icon: Icon, title, message }) => (
+const EmptyState = ({ icon: Icon, title, message }: { icon: IconComponent; title: string; message: string }) => (
   <div className="flex flex-col items-center justify-center p-12 text-center border border-dashed border-neutral-800 bg-neutral-900/30">
     <Icon className="w-12 h-12 text-neutral-600 mb-4" />
     <h3 className="text-lg font-bold text-neutral-300 uppercase tracking-widest mb-2">{title}</h3>
@@ -73,7 +84,7 @@ const EmptyState = ({ icon: Icon, title, message }) => (
   </div>
 );
 
-const HomeView = ({ setView }) => (
+const HomeView = ({ setView }: { setView: React.Dispatch<React.SetStateAction<View>> }) => (
   <div className="space-y-24 pb-24">
     {/* Hero Section */}
     <div className="relative h-[80vh] flex items-center justify-center overflow-hidden bg-neutral-950">
@@ -124,7 +135,7 @@ const HomeView = ({ setView }) => (
   </div>
 );
 
-const TeamView = ({ setView, setActivePlayer }) => (
+const TeamView = ({ setView, setActivePlayer }: { setView: React.Dispatch<React.SetStateAction<View>>; setActivePlayer: React.Dispatch<React.SetStateAction<Player | null>> }) => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
     <div className="mb-16 border-l-4 border-orange-500 pl-6">
       <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-wider italic">
@@ -189,7 +200,7 @@ const TeamView = ({ setView, setActivePlayer }) => (
   </div>
 );
 
-const PlayerView = ({ player, setView }) => {
+const PlayerView = ({ player, setView }: { player: Player | null; setView: React.Dispatch<React.SetStateAction<View>> }) => {
   const [activeTab, setActiveTab] = useState('history');
 
   if (!player) return null;
@@ -285,7 +296,7 @@ const PlayerView = ({ player, setView }) => {
   );
 };
 
-const GamesView = ({ setView, setActivePlayer }) => (
+const GamesView = ({ setView, setActivePlayer }: { setView: React.Dispatch<React.SetStateAction<View>>; setActivePlayer: React.Dispatch<React.SetStateAction<Player | null>> }) => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
     <div className="mb-16 border-l-4 border-orange-500 pl-6">
       <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-wider italic">Nossos Jogos</h2>
@@ -360,7 +371,7 @@ const HistoryView = () => (
       <div className="relative mb-16 md:flex justify-center items-center w-full group">
         <div className="md:w-1/2 md:pr-12 text-left md:text-right mb-4 md:mb-0 relative z-10">
           <h3 className="text-2xl font-black text-white uppercase italic tracking-wider mb-2 group-hover:text-orange-500 transition-colors">Fundação do Torega TCG</h3>
-          <p className="text-neutral-400">A equipe é oficialmente formada, reunindo 11 jogadores altamente capacitados através de grandes jogos de TCG com o objetivo de dominar o circuito competitivo.</p>
+          <p className="text-neutral-400">A equipe é oficialmente formada, reunindo 13 jogadores altamente capacitados através de grandes jogos de TCG com o objetivo de dominar o circuito competitivo.</p>
         </div>
         
         <div className="absolute left-[-2rem] md:left-1/2 transform md:-translate-x-1/2 w-4 h-4 rounded-full bg-orange-500 border-4 border-neutral-950 z-20"></div>
@@ -406,8 +417,8 @@ const NewsView = () => (
 );
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('home');
-  const [activePlayer, setActivePlayer] = useState(null);
+  const [currentView, setCurrentView] = useState<View>('home');
+  const [activePlayer, setActivePlayer] = useState<Player | null>(null);
 
   // Scroll to top on view change
   useEffect(() => {
