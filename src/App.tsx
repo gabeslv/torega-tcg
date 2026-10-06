@@ -30,38 +30,57 @@ const PLAYERS: Player[] = [
 const GAMES = ['Pokémon', 'One Piece', 'Riftbound', 'Magic'];
 
 const Header = ({ currentView, setView }: { currentView: View; setView: React.Dispatch<React.SetStateAction<View>> }) => {
-const navItems: { id: View; label: string }[] = [
-  { id: 'home', label: 'Início' },
-  { id: 'team', label: 'Equipe' },
-  { id: 'games', label: 'Jogos' },
-  { id: 'tournaments', label: 'Torneios' },
-  { id: 'history', label: 'História' },
-  { id: 'news', label: 'Notícias' }
-];
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  const navItems: { id: View; label: string }[] = [
+    { id: 'home', label: 'Início' },
+    { id: 'team', label: 'Equipe' },
+    { id: 'games', label: 'Jogos' },
+    { id: 'tournaments', label: 'Torneios' },
+    { id: 'history', label: 'História' },
+    { id: 'news', label: 'Notícias' }
+  ];
+
+  const handleNavigation = (view: View) => {
+    setView(view);
+    setMenuOpen(false);
+  };
+
   return (
-    <header className="sticky top-0 z-50 bg-neutral-950/90 backdrop-blur-md border-b border-orange-500/20">
+    <header className="sticky top-0 z-50 bg-neutral-950/95 backdrop-blur-md border-b border-orange-500/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-20">
-          <div 
+
+          {/* Logo */}
+          <div
             className="flex items-center gap-3 cursor-pointer group"
-            onClick={() => setView('home')}
+            onClick={() => handleNavigation('home')}
           >
             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-orange-500 group-hover:scale-105 transition-transform">
-              <img src="/toregafoto.png" alt="Logo do Torega" className="w-full h-full object-cover" />
+              <img
+                src="/toregafoto.png"
+                alt="Logo do Torega"
+                className="w-full h-full object-cover"
+              />
             </div>
+
             <span className="text-2xl font-black text-white tracking-wider uppercase italic group-hover:text-orange-500 transition-colors">
-              Torega<span className="text-orange-500 group-hover:text-white transition-colors">TCG</span>
+              Torega
+              <span className="text-orange-500 group-hover:text-white transition-colors">
+                TCG
+              </span>
             </span>
           </div>
-          
+
+          {/* Menu desktop */}
           <nav className="hidden md:flex space-x-6 lg:space-x-8">
             {navItems.map(item => (
               <button
                 key={item.id}
-                onClick={() => setView(item.id)}
+                onClick={() => handleNavigation(item.id)}
                 className={`text-sm font-bold uppercase tracking-widest transition-colors pb-1 border-b-2 ${
-                  currentView === item.id 
-                    ? 'text-orange-500 border-orange-500' 
+                  currentView === item.id
+                    ? 'text-orange-500 border-orange-500'
                     : 'text-neutral-400 border-transparent hover:text-white hover:border-white/50'
                 }`}
               >
@@ -69,7 +88,44 @@ const navItems: { id: View; label: string }[] = [
               </button>
             ))}
           </nav>
+
+          {/* Botão mobile */}
+          <button
+            type="button"
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="md:hidden flex items-center justify-center w-11 h-11 border border-neutral-800 text-neutral-300 hover:text-orange-500 hover:border-orange-500 transition-colors"
+            aria-label={menuOpen ? 'Fechar menu' : 'Abrir menu'}
+          >
+            {menuOpen ? (
+              <span className="text-2xl leading-none">×</span>
+            ) : (
+              <span className="text-2xl leading-none">☰</span>
+            )}
+          </button>
+
         </div>
+
+        {/* Menu mobile */}
+        {menuOpen && (
+          <nav className="md:hidden border-t border-neutral-800 py-4">
+            <div className="flex flex-col">
+              {navItems.map(item => (
+                <button
+                  key={item.id}
+                  onClick={() => handleNavigation(item.id)}
+                  className={`w-full text-left px-4 py-4 text-sm font-bold uppercase tracking-widest border-l-2 transition-colors ${
+                    currentView === item.id
+                      ? 'text-orange-500 border-orange-500 bg-orange-500/5'
+                      : 'text-neutral-400 border-transparent hover:text-white hover:border-neutral-600'
+                  }`}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        )}
+
       </div>
     </header>
   );
