@@ -38,10 +38,16 @@ export async function getPlayers(): Promise<PublicPlayer[]> {
     id: player.id,
     name: player.name,
     slug: player.slug,
-    photo: player.photo_url,
-    bio: player.bio,
+    photo: player.photo_url || null,
+    bio: player.bio || null,
     games: (player.player_games || [])
-      .map((item: any) => item.game?.[0]?.name)
-      .filter(Boolean),
+      .map((item: any) => {
+        if (Array.isArray(item.game)) {
+          return item.game[0]?.name;
+        }
+
+        return item.game?.name;
+      })
+      .filter((name: unknown): name is string => Boolean(name)),
   }));
 }
