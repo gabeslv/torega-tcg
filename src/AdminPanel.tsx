@@ -34,6 +34,11 @@ type Deck = {
   name: string;
   player_id: string;
   game_id: string | null;
+  format: string | null;
+  description: string | null;
+  image_url: string | null;
+  status: string;
+  decklist_image_url: string | null;
 };
 
 type Tournament = {
@@ -189,9 +194,37 @@ export default function AdminPanel({
   const [loadingDecks, setLoadingDecks] =
     useState(false);
 
+  /*
+   * =========================
+   * NOVO DECK
+   * =========================
+   */
+
+  const [showDeckForm, setShowDeckForm] = useState(false);
+  const [savingDeck, setSavingDeck] = useState(false);
+
+  const [deckName, setDeckName] = useState('');
+
+  const [decklistImageFile, setDecklistImageFile] =
+    useState<File | null>(null);
+
+  const [decklistImagePreview, setDecklistImagePreview] =
+    useState<string | null>(null);
+
   useEffect(() => {
     checkAccess();
   }, []);
+
+  /*
+   * =========================
+   * DECK SELECIONADO
+   * =========================
+   */
+
+  const selectedDeck =
+    playerDecks.find(
+      (deck) => deck.id === participantDeckId
+    ) || null;
 
   /*
    * =========================
@@ -223,9 +256,7 @@ export default function AdminPanel({
 
     await loadGames();
 
-    if (admin) {
-      await loadPlayers();
-    }
+    await loadPlayers();
 
     await loadTournaments();
 
@@ -1485,7 +1516,12 @@ export default function AdminPanel({
           id,
           name,
           player_id,
-          game_id
+          game_id,
+          format,
+          description,
+          image_url,
+          status,
+          decklist_image_url
         )
       `)
       .eq(
@@ -1583,6 +1619,8 @@ export default function AdminPanel({
     setParticipantPlayerId('');
     setParticipantDeckId('');
     setPlayerDecks([]);
+
+    closeDeckForm();
   }
 
   /*
@@ -1601,24 +1639,37 @@ export default function AdminPanel({
 
     setLoadingDecks(true);
 
-    const {
-      data,
-      error,
-    } = await supabase
+    let query = supabase
       .from('decks')
       .select(`
         id,
         name,
         player_id,
-        game_id
+        game_id,
+        format,
+        description,
+        image_url,
+        status,
+        decklist_image_url
       `)
       .eq(
         'player_id',
         playerId
-      )
-      .order(
-        'name'
       );
+
+    if (selectedTournament?.game_id) {
+      query = query.eq(
+        'game_id',
+        selectedTournament.game_id
+      );
+    }
+
+    const {
+      data,
+      error,
+    } = await query.order(
+      'name'
+    );
 
     if (error) {
       console.error(
@@ -1637,6 +1688,283 @@ export default function AdminPanel({
     );
 
     setLoadingDecks(false);
+  }
+
+  /*
+   * =========================
+   * NOVO DECK - FORM
+   * =========================
+   */
+
+  function resetDeckForm() {
+    setDeckName('');
+    setDecklistImageFile(null);
+
+    if (
+      decklistImagePreview &&
+      decklistImagePreview.startsWith('blob:')
+    ) {
+      URL.revokeObjectURL(
+        decklistImagePreview
+      );
+    }
+
+    setDecklistImagePreview(null);
+  }
+
+  function closeDeckForm() {
+    if (savingDeck) return;
+
+    setShowDeckForm(false);
+    resetDeckForm();
+  }
+
+  function openNewDeckForm() {
+    resetDeckForm();
+    setShowDeckForm(true);
+  }
+
+  function handleDecklistImageChange(
+    file: File | null
+  ) {
+    if (!file) return;
+
+    if (
+      !file.type.startsWith('image/')
+    ) {
+      alert(
+        'Selecione uma imagem válida.'
+      );
+
+      return;
+    }
+
+    if (
+      file.size >
+      10 * 1024 * 1024
+    ) {
+      alert(
+        'A imagem da decklist deve ter no máximo 10 MB.'
+      );
+
+      return;
+    }
+
+    if (
+      decklistImagePreview &&
+      decklistImagePreview.startsWith('blob:')
+    ) {
+      URL.revokeObjectURL(
+        decklistImagePreview
+      );
+    }
+
+    setDecklistImageFile(file);
+
+    setDecklistImagePreview(
+      URL.createObjectURL(file)
+    );
+  }
+
+  async function uploadDecklistImage(
+    deckId: string
+  ) {
+    if (!decklistImageFile) {
+      return null;
+    }
+
+    const extension =
+      decklistImageFile.name
+        .split('.')
+        .pop()
+        ?.toLowerCase() ||
+      'jpg';
+
+    const filePath =
+      `${deckId}/decklist.${extension}`;
+
+    const {
+      error: uploadError,
+    } = await supabase.storage
+      .from('decks')
+      .upload(
+        filePath,
+        decklistImageFile,
+        {
+          upsert: true,
+          contentType:
+            decklistImageFile.type,
+        }
+      );
+
+    if (uploadError) {
+      console.error(
+        'Erro ao enviar decklist:',
+        uploadError
+      );
+
+      throw new Error(
+        uploadError.message
+      );
+    }
+
+    const { data } =
+      supabase.storage
+        .from('decks')
+        .getPublicUrl(
+          filePath
+        );
+
+    return data.publicUrl;
+  }
+
+  async function handleCreateDeck() {
+    if (!selectedTournament) {
+      alert(
+        'Selecione um torneio.'
+      );
+
+      return;
+    }
+
+    if (!participantPlayerId) {
+      alert(
+        'Selecione o jogador.'
+      );
+
+      return;
+    }
+
+    if (!deckName.trim()) {
+      alert(
+        'Informe o nome do deck.'
+      );
+
+      return;
+    }
+
+    if (!decklistImageFile) {
+      alert(
+        'Envie a foto da decklist.'
+      );
+
+      return;
+    }
+
+    if (
+      !isAdmin &&
+      currentProfile?.player_id !==
+        participantPlayerId
+    ) {
+      alert(
+        'Você só pode criar um deck para o seu próprio jogador.'
+      );
+
+      return;
+    }
+
+    setSavingDeck(true);
+
+    try {
+      const {
+        data: deck,
+        error: deckError,
+      } = await supabase
+        .from('decks')
+        .insert({
+          player_id:
+            participantPlayerId,
+
+          game_id:
+            selectedTournament.game_id,
+
+          name:
+            deckName.trim(),
+
+          status:
+            'published',
+        })
+        .select('id')
+        .single();
+
+      if (deckError) {
+        console.error(
+          'Erro ao criar deck:',
+          deckError
+        );
+
+        alert(
+          deckError.message
+        );
+
+        return;
+      }
+
+      try {
+        const decklistUrl =
+          await uploadDecklistImage(
+            deck.id
+          );
+
+        const {
+          error: updateError,
+        } = await supabase
+          .from('decks')
+          .update({
+            decklist_image_url:
+              decklistUrl,
+          })
+          .eq(
+            'id',
+            deck.id
+          );
+
+        if (updateError) {
+          throw new Error(
+            updateError.message
+          );
+        }
+      } catch (error) {
+        await supabase
+          .from('decks')
+          .delete()
+          .eq(
+            'id',
+            deck.id
+          );
+
+        alert(
+          error instanceof Error
+            ? error.message
+            : 'Não foi possível salvar a decklist.'
+        );
+
+        return;
+      }
+
+      await loadPlayerDecks(
+        participantPlayerId
+      );
+
+      setParticipantDeckId(
+        deck.id
+      );
+
+      closeDeckForm();
+    } catch (error) {
+      console.error(
+        'Erro inesperado ao criar deck:',
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : 'Ocorreu um erro ao criar o deck.'
+      );
+    } finally {
+      setSavingDeck(false);
+    }
   }
 
   /*
@@ -3437,7 +3765,7 @@ export default function AdminPanel({
         selectedTournament && (
           <div className="fixed inset-0 z-[60] bg-black/90 backdrop-blur-sm flex items-center justify-center px-4 py-8">
 
-            <div className="w-full max-w-xl bg-neutral-950 border border-neutral-800">
+            <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-neutral-950 border border-neutral-800">
 
               <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-900">
 
@@ -3558,58 +3886,116 @@ export default function AdminPanel({
                     Deck usado no torneio
                   </label>
 
-                  <select
-                    value={
-                      participantDeckId
-                    }
-                    onChange={(
-                      event
-                    ) =>
-                      setParticipantDeckId(
-                        event.target
-                          .value
-                      )
-                    }
-                    disabled={
-                      !participantPlayerId ||
-                      loadingDecks
-                    }
-                    className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500 disabled:opacity-50"
-                  >
+                  <div className="flex gap-3">
 
-                    <option value="">
-                      {loadingDecks
-                        ? 'Carregando decks...'
-                        : 'Selecione o deck'}
-                    </option>
+                    <select
+                      value={
+                        participantDeckId
+                      }
+                      onChange={(
+                        event
+                      ) =>
+                        setParticipantDeckId(
+                          event.target
+                            .value
+                        )
+                      }
+                      disabled={
+                        !participantPlayerId ||
+                        loadingDecks
+                      }
+                      className="flex-1 min-w-0 bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500 disabled:opacity-50"
+                    >
 
-                    {playerDecks.map(
-                      (deck) => (
-                        <option
-                          key={
-                            deck.id
-                          }
-                          value={
-                            deck.id
-                          }
-                        >
-                          {
-                            deck.name
-                          }
-                        </option>
-                      )
-                    )}
+                      <option value="">
+                        {loadingDecks
+                          ? 'Carregando decks...'
+                          : 'Selecione o deck'}
+                      </option>
 
-                  </select>
+                      {playerDecks.map(
+                        (deck) => (
+                          <option
+                            key={
+                              deck.id
+                            }
+                            value={
+                              deck.id
+                            }
+                          >
+                            {
+                              deck.name
+                            }
+                          </option>
+                        )
+                      )}
+
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={
+                        openNewDeckForm
+                      }
+                      disabled={
+                        !participantPlayerId ||
+                        savingParticipant
+                      }
+                      className="shrink-0 inline-flex items-center justify-center gap-2 border border-neutral-800 px-4 py-3 text-sm text-neutral-300 hover:text-white hover:bg-white/5 disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <Plus size={16} />
+                      Novo deck
+                    </button>
+
+                  </div>
 
                   {!loadingDecks &&
                     participantPlayerId &&
                     playerDecks.length ===
                       0 && (
-                      <p className="text-xs text-yellow-500 mt-2">
-                        Este jogador ainda não possui nenhum deck cadastrado.
-                      </p>
+                      <div className="mt-3 border border-neutral-900 bg-white/[0.02] px-4 py-4">
+
+                        <p className="text-sm text-white">
+                          Nenhum deck cadastrado para este jogo.
+                        </p>
+
+                        <p className="text-xs text-neutral-600 mt-1">
+                          Crie o deck usado pelo jogador neste torneio.
+                        </p>
+
+                        <button
+                          type="button"
+                          onClick={
+                            openNewDeckForm
+                          }
+                          className="mt-3 inline-flex items-center gap-2 text-xs text-white hover:text-neutral-300"
+                        >
+                          <Plus size={14} />
+                          Criar primeiro deck
+                        </button>
+
+                      </div>
                     )}
+
+                  {selectedDeck?.decklist_image_url && (
+                    <div className="mt-4 border border-neutral-900 bg-black overflow-hidden">
+
+                      <div className="px-4 py-3 border-b border-neutral-900">
+                        <p className="text-xs uppercase tracking-[0.15em] text-neutral-500">
+                          Decklist
+                        </p>
+                      </div>
+
+                      <img
+                        src={
+                          selectedDeck.decklist_image_url
+                        }
+                        alt={`Decklist ${selectedDeck.name}`}
+                        className="w-full h-auto max-h-[520px] object-contain"
+                      />
+
+                    </div>
+                  )}
 
                 </div>
 
@@ -3669,6 +4055,218 @@ export default function AdminPanel({
                     : editingParticipant
                       ? 'Salvar alterações'
                       : 'Adicionar participante'}
+                </button>
+
+              </div>
+
+            </div>
+
+          </div>
+        )}
+
+      {/* =========================
+          FORMULÁRIO NOVO DECK
+      ========================= */}
+
+      {showDeckForm &&
+        selectedTournament &&
+        participantPlayerId && (
+          <div className="fixed inset-0 z-[70] bg-black/95 backdrop-blur-sm flex items-center justify-center px-4 py-8">
+
+            <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto bg-neutral-950 border border-neutral-800">
+
+              {/* HEADER */}
+
+              <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-900">
+
+                <div>
+
+                  <p className="text-xs uppercase tracking-[0.2em] text-neutral-500">
+                    Deck
+                  </p>
+
+                  <h3 className="text-xl font-semibold text-white mt-1">
+                    Novo deck
+                  </h3>
+
+                  <p className="text-xs text-neutral-600 mt-2">
+                    {selectedTournament.game?.name ||
+                      'Jogo do torneio'}
+                  </p>
+
+                </div>
+
+                <button
+                  onClick={
+                    closeDeckForm
+                  }
+                  disabled={
+                    savingDeck
+                  }
+                  className="text-neutral-500 hover:text-white disabled:opacity-50"
+                >
+                  <X size={20} />
+                </button>
+
+              </div>
+
+              <div className="p-6 space-y-6">
+
+                {/* NOME */}
+
+                <div>
+
+                  <label className="block text-sm text-neutral-400 mb-2">
+                    Nome do deck
+                  </label>
+
+                  <input
+                    type="text"
+                    value={
+                      deckName
+                    }
+                    onChange={(
+                      event
+                    ) =>
+                      setDeckName(
+                        event.target
+                          .value
+                      )
+                    }
+                    placeholder="Ex.: Luffy"
+                    className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500"
+                  />
+
+                </div>
+
+                {/* DECKLIST */}
+
+                <div>
+
+                  <label className="block text-sm text-neutral-400 mb-3">
+                    Decklist
+                  </label>
+
+                  <div className="w-full min-h-64 bg-black border border-neutral-800 overflow-hidden flex items-center justify-center">
+
+                    {decklistImagePreview ? (
+                      <img
+                        src={
+                          decklistImagePreview
+                        }
+                        alt="Preview da decklist"
+                        className="w-full h-auto max-h-[520px] object-contain"
+                      />
+                    ) : (
+                      <div className="py-20 text-center">
+
+                        <Layers
+                          size={36}
+                          className="mx-auto text-neutral-700"
+                        />
+
+                        <p className="text-sm text-neutral-500 mt-4">
+                          Envie a foto da decklist
+                        </p>
+
+                        <p className="text-xs text-neutral-700 mt-2">
+                          A imagem será salva no perfil do jogador.
+                        </p>
+
+                      </div>
+                    )}
+
+                  </div>
+
+                  <label className="mt-4 inline-flex items-center gap-2 border border-neutral-800 px-4 py-3 text-sm text-neutral-300 hover:text-white hover:bg-white/5 cursor-pointer">
+
+                    <Upload size={16} />
+
+                    Escolher foto
+
+                    <input
+                      type="file"
+                      accept="image/*"
+                      hidden
+                      onChange={(
+                        event
+                      ) =>
+                        handleDecklistImageChange(
+                          event
+                            .target
+                            .files?.[0] ||
+                            null
+                        )
+                      }
+                    />
+
+                  </label>
+
+                  <p className="text-xs text-neutral-600 mt-2">
+                    JPG, PNG ou WEBP · máximo 10 MB
+                  </p>
+
+                </div>
+
+                {/* RESUMO */}
+
+                <div className="border border-neutral-900 bg-white/[0.02] px-4 py-4">
+
+                  <p className="text-sm text-white">
+                    Jogo:{' '}
+                    {selectedTournament.game?.name ||
+                      '—'}
+                  </p>
+
+                  <p className="text-sm text-white mt-1">
+                    Jogador:{' '}
+                    {players.find(
+                      (player) =>
+                        player.id ===
+                        participantPlayerId
+                    )?.name ||
+                      currentProfile?.display_name ||
+                      '—'}
+                  </p>
+
+                  <p className="text-xs text-neutral-600 mt-2">
+                    O jogo é definido automaticamente pelo torneio. O deck ficará disponível no perfil do jogador e poderá ser reutilizado em outros torneios do mesmo jogo.
+                  </p>
+
+                </div>
+
+              </div>
+
+              {/* FOOTER */}
+
+              <div className="flex justify-end gap-3 px-6 py-5 border-t border-neutral-900">
+
+                <button
+                  onClick={
+                    closeDeckForm
+                  }
+                  disabled={
+                    savingDeck
+                  }
+                  className="border border-neutral-800 px-5 py-3 text-sm text-neutral-400 hover:text-white hover:bg-white/5 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  onClick={
+                    handleCreateDeck
+                  }
+                  disabled={
+                    savingDeck ||
+                    !deckName.trim() ||
+                    !decklistImageFile
+                  }
+                  className="bg-white text-black px-5 py-3 text-sm font-semibold hover:bg-neutral-200 disabled:opacity-50"
+                >
+                  {savingDeck
+                    ? 'Salvando...'
+                    : 'Criar deck'}
                 </button>
 
               </div>
