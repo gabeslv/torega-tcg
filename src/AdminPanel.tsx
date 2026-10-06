@@ -16,7 +16,7 @@ type Player = {
   bio: string | null;
   active: boolean;
   player_games: {
-    game: Game[];
+    game: Game | null;
   }[];
 };
 
@@ -139,7 +139,7 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
     setActive(player.active);
 
     const playerGameIds = player.player_games
-      ?.map(({ game }) => game[0]?.id)
+      ?.map(({ game }) => game?.id)
       .filter((id): id is string => Boolean(id));
 
     setSelectedGames(playerGameIds || []);
@@ -567,18 +567,16 @@ export default function AdminPanel({ onLogout }: AdminPanelProps) {
 
               <div className="flex flex-wrap gap-2">
                 {player.player_games?.map(({ game }) => {
-                  const currentGame = game[0];
-
-                  if (!currentGame) {
+                  if (!game) {
                     return null;
                   }
 
                   return (
                     <span
-                      key={currentGame.id}
+                      key={game.id}
                       className="text-xs border border-neutral-800 px-2 py-1 text-neutral-400"
                     >
-                      {currentGame.name}
+                      {game.name}
                     </span>
                   );
                 })}
