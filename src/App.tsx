@@ -30,15 +30,14 @@ const PLAYERS: Player[] = [
 const GAMES = ['Pokémon', 'One Piece', 'Riftbound', 'Magic'];
 
 const Header = ({ currentView, setView }: { currentView: View; setView: React.Dispatch<React.SetStateAction<View>> }) => {
-  const navItems = [
-    { id: 'home', label: 'Início' },
-    { id: 'team', label: 'Equipe' },
-    { id: 'games', label: 'Jogos' },
-    { id: 'tournaments', label: 'Torneios' },
-    { id: 'history', label: 'História' },
-    { id: 'news', label: 'Notícias' }
-  ];
-
+const navItems: { id: View; label: string }[] = [
+  { id: 'home', label: 'Início' },
+  { id: 'team', label: 'Equipe' },
+  { id: 'games', label: 'Jogos' },
+  { id: 'tournaments', label: 'Torneios' },
+  { id: 'history', label: 'História' },
+  { id: 'news', label: 'Notícias' }
+];
   return (
     <header className="sticky top-0 z-50 bg-neutral-950/90 backdrop-blur-md border-b border-orange-500/20">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
