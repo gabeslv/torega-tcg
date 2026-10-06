@@ -62,6 +62,9 @@ type TournamentParticipant = {
   tournament_id: string;
   player_id: string;
   deck_id: string | null;
+  placement: number | null;
+  wins: number;
+  losses: number;
   player: Player | null;
   deck: Deck | null;
 };
@@ -187,6 +190,16 @@ export default function AdminPanel({
 
   const [participantDeckId, setParticipantDeckId] =
     useState('');
+ 
+  const [participantPlacement, setParticipantPlacement] =
+    useState('');
+
+  const [participantWins, setParticipantWins] =
+    useState('0');
+
+  const [participantLosses, setParticipantLosses] =
+    useState('0');
+    
 
   const [playerDecks, setPlayerDecks] =
     useState<Deck[]>([]);
@@ -1504,6 +1517,9 @@ export default function AdminPanel({
         tournament_id,
         player_id,
         deck_id,
+        placement,
+        wins,
+        losses,
         player:players (
           id,
           name,
@@ -1977,6 +1993,9 @@ export default function AdminPanel({
     setEditingParticipant(null);
     setParticipantPlayerId('');
     setParticipantDeckId('');
+    setParticipantPlacement('');
+    setParticipantWins('0');
+    setParticipantLosses('0');
     setPlayerDecks([]);
   }
 
@@ -2008,44 +2027,31 @@ export default function AdminPanel({
   function openEditParticipantForm(
     participant: TournamentParticipant
   ) {
-    setEditingParticipant(
-      participant
+    setEditingParticipant(participant);
+    setParticipantPlayerId(participant.player_id);
+    setParticipantDeckId(participant.deck_id || '');
+    setParticipantPlacement(
+      participant.placement !== null
+        ? String(participant.placement)
+        : ''
     );
-
-    setParticipantPlayerId(
-      participant.player_id
-    );
-
-    setParticipantDeckId(
-      participant.deck_id ||
-        ''
-    );
-
-    loadPlayerDecks(
-      participant.player_id
-    );
-
+    setParticipantWins(String(participant.wins ?? 0));
+    setParticipantLosses(String(participant.losses ?? 0));
+    loadPlayerDecks(participant.player_id);
     setShowParticipantForm(true);
   }
 
-  /*
-   * =========================
-   * JOGADOR ALTERADO
-   * =========================
-   */
-
-  async function handleParticipantPlayerChange(
+  function handleParticipantPlayerChange(
     playerId: string
   ) {
-    setParticipantPlayerId(
-      playerId
-    );
-
+    setParticipantPlayerId(playerId);
     setParticipantDeckId('');
 
-    await loadPlayerDecks(
-      playerId
-    );
+    if (playerId) {
+      loadPlayerDecks(playerId);
+    } else {
+      setPlayerDecks([]);
+    }
   }
 
   /*
@@ -2060,161 +2066,113 @@ export default function AdminPanel({
     }
 
     if (!participantPlayerId) {
-      alert(
-        'Selecione o jogador.'
-      );
-
+      alert('Selecione o jogador.');
       return;
     }
 
     if (!participantDeckId) {
-      alert(
-        'Selecione o deck usado no torneio.'
-      );
+      alert('Selecione o deck usado no torneio.');
+      return;
+    }
 
+    const wins = Number(participantWins);
+    const losses = Number(participantLosses);
+    const placement =
+      participantPlacement.trim() === ''
+        ? null
+        : Number(participantPlacement);
+
+    if (!Number.isInteger(wins) || wins < 0) {
+      alert('Informe um número válido de vitórias.');
+      return;
+    }
+
+    if (!Number.isInteger(losses) || losses < 0) {
+      alert('Informe um número válido de derrotas.');
+      return;
+    }
+
+    if (
+      placement !== null &&
+      (!Number.isInteger(placement) || placement < 1)
+    ) {
+      alert('A colocação deve ser um número maior que zero.');
       return;
     }
 
     setSavingParticipant(true);
 
     try {
-      /*
-       * Jogador comum só pode
-       * cadastrar o próprio jogador.
-       */
-
       if (
         !isAdmin &&
-        currentProfile?.player_id !==
-          participantPlayerId
+        currentProfile?.player_id !== participantPlayerId
       ) {
-        alert(
-          'Você só pode adicionar o seu próprio jogador.'
-        );
-
+        alert('Você só pode adicionar o seu próprio jogador.');
         return;
       }
 
-      /*
-       * Verifica se o jogador
-       * já está no torneio.
-       */
+      const existingQuery = await supabase
+        .from('tournament_players')
+        .select('id')
+        .eq('tournament_id', selectedTournament.id)
+        .eq('player_id', participantPlayerId)
+        .maybeSingle();
 
-      const existingQuery =
-        await supabase
-          .from(
-            'tournament_players'
-          )
-          .select('id')
-          .eq(
-            'tournament_id',
-            selectedTournament.id
-          )
-          .eq(
-            'player_id',
-            participantPlayerId
-          )
-          .maybeSingle();
-
-      if (
-        existingQuery.error
-      ) {
+      if (existingQuery.error) {
         console.error(
           'Erro ao verificar participante:',
           existingQuery.error
         );
 
-        alert(
-          existingQuery.error.message
-        );
-
+        alert(existingQuery.error.message);
         return;
       }
 
       if (
         existingQuery.data &&
         (!editingParticipant ||
-          existingQuery.data.id !==
-            editingParticipant.id)
+          existingQuery.data.id !== editingParticipant.id)
       ) {
-        alert(
-          'Este jogador já está cadastrado neste torneio.'
-        );
-
+        alert('Este jogador já está cadastrado neste torneio.');
         return;
       }
 
-      if (editingParticipant) {
-        const {
-          error,
-        } = await supabase
-          .from(
-            'tournament_players'
-          )
-          .update({
-            player_id:
-              participantPlayerId,
+      const participantData = {
+        player_id: participantPlayerId,
+        deck_id: participantDeckId,
+        placement,
+        wins,
+        losses,
+      };
 
-            deck_id:
-              participantDeckId,
-          })
-          .eq(
-            'id',
-            editingParticipant.id
-          );
+      if (editingParticipant) {
+        const { error } = await supabase
+          .from('tournament_players')
+          .update(participantData)
+          .eq('id', editingParticipant.id);
 
         if (error) {
-          console.error(
-            'Erro ao atualizar participante:',
-            error
-          );
-
-          alert(
-            error.message
-          );
-
+          console.error('Erro ao atualizar participante:', error);
+          alert(error.message);
           return;
         }
       } else {
-        const {
-          error,
-        } = await supabase
-          .from(
-            'tournament_players'
-          )
+        const { error } = await supabase
+          .from('tournament_players')
           .insert({
-            tournament_id:
-              selectedTournament.id,
-
-            player_id:
-              participantPlayerId,
-
-            deck_id:
-              participantDeckId,
+            tournament_id: selectedTournament.id,
+            ...participantData,
           });
 
         if (error) {
-          console.error(
-            'Erro ao adicionar participante:',
-            error
-          );
-
-          alert(
-            error.message
-          );
-
+          console.error('Erro ao adicionar participante:', error);
+          alert(error.message);
           return;
         }
       }
 
-      await loadParticipants(
-        selectedTournament.id
-      );
-
-      setShowParticipantForm(
-        false
-      );
-
+      await loadParticipants(selectedTournament.id);
+      setShowParticipantForm(false);
       resetParticipantForm();
 
       alert(
@@ -2223,11 +2181,7 @@ export default function AdminPanel({
           : 'Participante adicionado ao torneio.'
       );
     } catch (error) {
-      console.error(
-        'Erro inesperado:',
-        error
-      );
-
+      console.error('Erro inesperado:', error);
       alert(
         error instanceof Error
           ? error.message
@@ -2397,7 +2351,7 @@ export default function AdminPanel({
       {/* HEADER */}
 
       <header className="border-b border-neutral-900">
-        <div className="max-w-7xl mx-auto px-6 py-5 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-4">
 
           <div className="flex items-center gap-4">
 
@@ -2447,11 +2401,11 @@ export default function AdminPanel({
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto px-6 py-10">
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-8 sm:py-10">
 
         {/* NAVEGAÇÃO */}
 
-        <div className="flex gap-2 border-b border-neutral-900 mb-10">
+        <div className="flex flex-wrap gap-2 border-b border-neutral-900 mb-8 sm:mb-10">
 
           <button
             onClick={() =>
@@ -2504,7 +2458,7 @@ export default function AdminPanel({
           isAdmin && (
             <section>
 
-              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-10">
+              <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 sm:gap-6 mb-8 sm:mb-10">
 
                 <div>
 
@@ -2545,7 +2499,7 @@ export default function AdminPanel({
 
               <div className="border border-neutral-900 overflow-hidden">
 
-                <div className="grid grid-cols-[1fr_220px_100px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
+                <div className="grid grid-cols-[1fr_220px_100px] gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
                   <span>
                     Jogador
                   </span>
@@ -2565,7 +2519,7 @@ export default function AdminPanel({
                       key={
                         player.id
                       }
-                      className="grid grid-cols-[1fr_220px_100px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
+                      className="grid grid-cols-[1fr_220px_100px] gap-3 sm:gap-4 px-4 sm:px-5 py-4 sm:py-5 border-b border-neutral-900 last:border-b-0 items-center"
                     >
 
                       <div className="flex items-center gap-4">
@@ -2683,7 +2637,7 @@ export default function AdminPanel({
           'tournaments' && (
           <section>
 
-            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-6 mb-10">
+            <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4 sm:gap-6 mb-8 sm:mb-10">
 
               <div>
 
@@ -2726,7 +2680,7 @@ export default function AdminPanel({
 
             <div className="border border-neutral-900 overflow-hidden">
 
-              <div className="grid grid-cols-[1fr_160px_140px_170px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
+              <div className="grid grid-cols-[1fr_160px_140px_170px] gap-3 sm:gap-4 px-4 sm:px-5 py-3 sm:py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
                 <span>
                   Torneio
                 </span>
@@ -2750,7 +2704,7 @@ export default function AdminPanel({
                     key={
                       tournament.id
                     }
-                    className="grid grid-cols-[1fr_160px_140px_170px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
+                    className="grid grid-cols-[1fr_160px_140px_170px] gap-3 sm:gap-4 px-4 sm:px-5 py-4 sm:py-5 border-b border-neutral-900 last:border-b-0 items-center"
                   >
 
                     <div className="flex items-center gap-4 min-w-0">
@@ -3636,13 +3590,17 @@ export default function AdminPanel({
                 ) : (
                   <div className="border border-neutral-900 overflow-hidden">
 
-                    <div className="grid grid-cols-[1fr_1fr_100px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
+                    <div className="grid grid-cols-[1fr_1fr_180px_100px] gap-4 px-5 py-4 bg-white/[0.03] border-b border-neutral-900 text-xs uppercase tracking-wider text-neutral-500">
                       <span>
                         Jogador
                       </span>
 
                       <span>
                         Deck usado
+                      </span>
+
+                      <span>
+                          Resultado
                       </span>
 
                       <span>
@@ -3656,7 +3614,7 @@ export default function AdminPanel({
                           key={
                             participant.id
                           }
-                          className="grid grid-cols-[1fr_1fr_100px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
+                          className="grid grid-cols-[1fr_1fr_180px_100px] gap-4 px-5 py-5 border-b border-neutral-900 last:border-b-0 items-center"
                         >
 
                           <div className="flex items-center gap-4">
@@ -3712,6 +3670,26 @@ export default function AdminPanel({
                             </span>
 
                           </div>
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-3">
+                                <span className="text-sm font-semibold text-white">
+                                    {participant.placement
+                                    ? `${participant.placement}º`
+                                    : '-'
+                                    }
+                                </span>
+                                <span className="text-xs text-green-400">
+                                    {participant.wins}V
+                                </span>
+                                <span className="text-xs text-red-400">
+                                    {participant.losses}D
+                                </span>
+
+                            </div>
+                            <span className="text-[10px] uppercase tracking-wider text-neutral-700">
+                               Resultado 
+                            </span>
+                           </div>
 
                           <div className="flex items-center gap-3">
 
@@ -3998,7 +3976,76 @@ export default function AdminPanel({
                   )}
 
                 </div>
+{/* RESULTADO */}
 
+<div>
+  <label className="block text-sm text-neutral-400 mb-3">
+    Resultado
+  </label>
+
+  <div className="grid grid-cols-3 gap-3">
+
+    <div>
+      <label className="block text-xs text-neutral-600 mb-2">
+        Colocação
+      </label>
+
+      <input
+        type="number"
+        min="1"
+        value={participantPlacement}
+        onChange={(event) =>
+          setParticipantPlacement(
+            event.target.value
+          )
+        }
+        placeholder="Ex.: 1"
+        className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500"
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs text-neutral-600 mb-2">
+        Vitórias
+      </label>
+
+      <input
+        type="number"
+        min="0"
+        value={participantWins}
+        onChange={(event) =>
+          setParticipantWins(
+            event.target.value
+          )
+        }
+        className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500"
+      />
+    </div>
+
+    <div>
+      <label className="block text-xs text-neutral-600 mb-2">
+        Derrotas
+      </label>
+
+      <input
+        type="number"
+        min="0"
+        value={participantLosses}
+        onChange={(event) =>
+          setParticipantLosses(
+            event.target.value
+          )
+        }
+        className="w-full bg-black border border-neutral-800 px-4 py-3 text-white outline-none focus:border-neutral-500"
+      />
+    </div>
+
+  </div>
+
+  <p className="text-xs text-neutral-600 mt-2">
+    A colocação é opcional. Vitórias e derrotas começam em 0.
+  </p>
+</div>
                 <div className="border border-neutral-900 bg-white/[0.02] px-4 py-4">
 
                   <p className="text-sm text-white">
