@@ -89,27 +89,155 @@ type PublicMatch = {
   } | null;
 };
 
+/* =========================================================
+   ROTAS
+========================================================= */
+
+function navigateTo(path: string) {
+  window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function getRouteFromPathname(pathname: string): {
+  view: View;
+  playerSlug: string | null;
+  tournamentId: string | null;
+} {
+  const cleanPath = pathname.replace(/\/+$/, '') || '/';
+
+  if (cleanPath === '/admin') {
+    return {
+      view: 'home',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath === '/') {
+    return {
+      view: 'home',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath === '/jogadores' || cleanPath === '/equipe') {
+    return {
+      view: 'team',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath.startsWith('/jogador/')) {
+    const playerSlug = cleanPath.replace('/jogador/', '').split('/')[0];
+
+    return {
+      view: 'playerDetails',
+      playerSlug: playerSlug || null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath === '/jogos') {
+    return {
+      view: 'games',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath === '/torneios') {
+    return {
+      view: 'tournaments',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath.startsWith('/torneio/')) {
+    const tournamentId = cleanPath.replace('/torneio/', '').split('/')[0];
+
+    return {
+      view: 'tournamentDetails',
+      playerSlug: null,
+      tournamentId: tournamentId || null,
+    };
+  }
+
+  if (cleanPath === '/historia') {
+    return {
+      view: 'history',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  if (cleanPath === '/noticias') {
+    return {
+      view: 'news',
+      playerSlug: null,
+      tournamentId: null,
+    };
+  }
+
+  return {
+    view: 'home',
+    playerSlug: null,
+    tournamentId: null,
+  };
+}
+
+/* =========================================================
+   HEADER
+========================================================= */
+
 const Header = ({
   currentView,
-  setView,
 }: {
   currentView: View;
-  setView: React.Dispatch<React.SetStateAction<View>>;
 }) => {
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const navItems: { id: View; label: string }[] = [
-    { id: 'home', label: 'Início' },
-    { id: 'team', label: 'Equipe' },
-    { id: 'games', label: 'Jogos' },
-    { id: 'tournaments', label: 'Torneios' },
-    { id: 'history', label: 'História' },
-    { id: 'news', label: 'Notícias' },
+  const navItems: {
+    path: string;
+    view: View;
+    label: string;
+  }[] = [
+    {
+      path: '/',
+      view: 'home',
+      label: 'Início',
+    },
+    {
+      path: '/jogadores',
+      view: 'team',
+      label: 'Equipe',
+    },
+    {
+      path: '/jogos',
+      view: 'games',
+      label: 'Jogos',
+    },
+    {
+      path: '/torneios',
+      view: 'tournaments',
+      label: 'Torneios',
+    },
+    {
+      path: '/historia',
+      view: 'history',
+      label: 'História',
+    },
+    {
+      path: '/noticias',
+      view: 'news',
+      label: 'Notícias',
+    },
   ];
 
-  const handleNavigation = (view: View) => {
-    window.history.pushState({}, '', '/');
-    setView(view);
+  const handleNavigation = (path: string) => {
+    navigateTo(path);
     setMenuOpen(false);
   };
 
@@ -119,9 +247,10 @@ const Header = ({
         <div className="flex items-center justify-between h-20">
 
           {/* Logo */}
-          <div
+          <button
+            type="button"
+            onClick={() => handleNavigation('/')}
             className="flex items-center gap-3 cursor-pointer group"
-            onClick={() => handleNavigation('home')}
           >
             <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-orange-500 group-hover:scale-105 transition-transform">
               <img
@@ -137,16 +266,16 @@ const Header = ({
                 TCG
               </span>
             </span>
-          </div>
+          </button>
 
           {/* Menu desktop */}
           <nav className="hidden md:flex space-x-6 lg:space-x-8">
             {navItems.map((item) => (
               <button
-                key={item.id}
-                onClick={() => handleNavigation(item.id)}
+                key={item.path}
+                onClick={() => handleNavigation(item.path)}
                 className={`text-sm font-bold uppercase tracking-widest transition-colors pb-1 border-b-2 ${
-                  currentView === item.id
+                  currentView === item.view
                     ? 'text-orange-500 border-orange-500'
                     : 'text-neutral-400 border-transparent hover:text-white hover:border-white/50'
                 }`}
@@ -177,10 +306,10 @@ const Header = ({
             <div className="flex flex-col">
               {navItems.map((item) => (
                 <button
-                  key={item.id}
-                  onClick={() => handleNavigation(item.id)}
+                  key={item.path}
+                  onClick={() => handleNavigation(item.path)}
                   className={`w-full text-left px-4 py-4 text-sm font-bold uppercase tracking-widest border-l-2 transition-colors ${
-                    currentView === item.id
+                    currentView === item.view
                       ? 'text-orange-500 border-orange-500 bg-orange-500/5'
                       : 'text-neutral-400 border-transparent hover:text-white hover:border-neutral-600'
                   }`}
@@ -195,6 +324,10 @@ const Header = ({
     </header>
   );
 };
+
+/* =========================================================
+   EMPTY STATE
+========================================================= */
 
 const EmptyState = ({
   icon: Icon,
@@ -218,11 +351,13 @@ const EmptyState = ({
   </div>
 );
 
+/* =========================================================
+   HOME
+========================================================= */
+
 const HomeView = ({
-  setView,
   playerCount,
 }: {
-  setView: React.Dispatch<React.SetStateAction<View>>;
   playerCount: number;
 }) => (
   <div className="space-y-24 pb-24">
@@ -247,7 +382,7 @@ const HomeView = ({
         </p>
 
         <button
-          onClick={() => setView('team')}
+          onClick={() => navigateTo('/jogadores')}
           className="group relative px-8 py-4 bg-orange-600 text-white font-bold uppercase tracking-widest overflow-hidden transition-transform hover:scale-105"
         >
           <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform"></div>
@@ -309,16 +444,16 @@ const HomeView = ({
   </div>
 );
 
+/* =========================================================
+   EQUIPE / JOGADORES
+========================================================= */
+
 const TeamView = ({
   players,
   loading,
-  setView,
-  setActivePlayer,
 }: {
   players: PublicPlayer[];
   loading: boolean;
-  setView: React.Dispatch<React.SetStateAction<View>>;
-  setActivePlayer: React.Dispatch<React.SetStateAction<PublicPlayer | null>>;
 }) => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 
@@ -345,13 +480,11 @@ const TeamView = ({
     ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {players.map((player, index) => (
-          <div
+          <button
             key={player.id}
-            onClick={() => {
-              setActivePlayer(player);
-              setView('playerDetails');
-            }}
-            className="group cursor-pointer relative bg-neutral-900 overflow-hidden border border-neutral-800 hover:border-orange-500 transition-colors"
+            type="button"
+            onClick={() => navigateTo(`/jogador/${player.slug}`)}
+            className="group cursor-pointer relative bg-neutral-900 overflow-hidden border border-neutral-800 hover:border-orange-500 transition-colors text-left"
           >
             <div className="absolute inset-0 bg-gradient-to-t from-neutral-950 via-transparent to-transparent z-10 pointer-events-none"></div>
 
@@ -391,36 +524,43 @@ const TeamView = ({
                 ))}
               </div>
             </div>
-          </div>
+          </button>
         ))}
       </div>
     )}
   </div>
 );
 
+/* =========================================================
+   JOGADOR
+========================================================= */
+
 const PlayerView = ({
   player,
-  setView,
   onOpenTournament,
 }: {
   player: PublicPlayer | null;
-  setView: React.Dispatch<React.SetStateAction<View>>;
   onOpenTournament: (id: string) => void;
 }) => {
   const [activeTab, setActiveTab] = useState('history');
-  
+
   const [playerDecks, setPlayerDecks] = useState<any[]>([]);
   const [playerTournaments, setPlayerTournaments] = useState<any[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [decklistImage, setDecklistImage] = useState<string | null>(null);
 
-useEffect(() => {
-    if (!player?.id) return;
+  useEffect(() => {
+    if (!player?.id) {
+      setPlayerDecks([]);
+      setPlayerTournaments([]);
+      setLoadingData(false);
+      return;
+    }
 
     async function loadPlayerData() {
       setLoadingData(true);
 
-      // Carregar os Decks do jogador
+      /* Decks */
       const { data: decksData } = await supabase
         .from('decks')
         .select(`
@@ -431,16 +571,18 @@ useEffect(() => {
           decklist_image_url,
           game:games(name)
         `)
-        .eq('player_id', player!.id); // Usando '!' após verificar se player?.id existe
+        .eq('player_id', player!.id);
 
       const normalizedDecks = (decksData || []).map((deck: any) => ({
         ...deck,
-        game: Array.isArray(deck.game) ? deck.game[0] : deck.game
+        game: Array.isArray(deck.game)
+          ? deck.game[0]
+          : deck.game,
       }));
 
       setPlayerDecks(normalizedDecks);
 
-      // Carregar os Torneios do jogador
+      /* Torneios */
       const { data: tournamentsData } = await supabase
         .from('tournament_players')
         .select(`
@@ -460,21 +602,42 @@ useEffect(() => {
         `)
         .eq('player_id', player!.id);
 
-      // Normalizar e filtrar apenas os torneios "aprovados" (públicos)
       const normalizedTournaments = (tournamentsData || [])
         .map((tp: any) => {
-          const tournament = Array.isArray(tp.tournament) ? tp.tournament[0] : tp.tournament;
-          const deck = Array.isArray(tp.deck) ? tp.deck[0] : tp.deck;
-          if (tournament) {
-            tournament.game = Array.isArray(tournament.game) ? tournament.game[0] : tournament.game;
-          }
-          return { ...tp, tournament, deck };
-        })
-        .filter((tp: any) => tp.tournament && tp.tournament.status === 'approved');
+          const tournament = Array.isArray(tp.tournament)
+            ? tp.tournament[0]
+            : tp.tournament;
 
-      // Ordenar do mais recente para o mais antigo
-      normalizedTournaments.sort((a, b) =>
-        new Date(b.tournament.tournament_date).getTime() - new Date(a.tournament.tournament_date).getTime()
+          const deck = Array.isArray(tp.deck)
+            ? tp.deck[0]
+            : tp.deck;
+
+          if (tournament) {
+            tournament.game = Array.isArray(tournament.game)
+              ? tournament.game[0]
+              : tournament.game;
+          }
+
+          return {
+            ...tp,
+            tournament,
+            deck,
+          };
+        })
+        .filter(
+          (tp: any) =>
+            tp.tournament &&
+            tp.tournament.status === 'approved'
+        );
+
+      normalizedTournaments.sort(
+        (a, b) =>
+          new Date(
+            b.tournament.tournament_date
+          ).getTime() -
+          new Date(
+            a.tournament.tournament_date
+          ).getTime()
       );
 
       setPlayerTournaments(normalizedTournaments);
@@ -484,31 +647,38 @@ useEffect(() => {
     loadPlayerData();
   }, [player?.id]);
 
-  // Cálculo das Estatísticas
   const stats = useMemo(() => {
     let totalWins = 0;
     let totalLosses = 0;
     let bestPlacement: number | null = null;
 
-    playerTournaments.forEach(tp => {
+    playerTournaments.forEach((tp) => {
       totalWins += tp.wins || 0;
       totalLosses += tp.losses || 0;
+
       if (tp.placement) {
-        if (bestPlacement === null || tp.placement < bestPlacement) {
+        if (
+          bestPlacement === null ||
+          tp.placement < bestPlacement
+        ) {
           bestPlacement = tp.placement;
         }
       }
     });
 
     const totalMatches = totalWins + totalLosses;
-    const winRate = totalMatches > 0 ? Math.round((totalWins / totalMatches) * 100) : 0;
 
-    return { 
-      totalTournaments: playerTournaments.length, 
-      totalWins, 
-      totalLosses, 
-      winRate, 
-      bestPlacement 
+    const winRate =
+      totalMatches > 0
+        ? Math.round((totalWins / totalMatches) * 100)
+        : 0;
+
+    return {
+      totalTournaments: playerTournaments.length,
+      totalWins,
+      totalLosses,
+      winRate,
+      bestPlacement,
     };
   }, [playerTournaments]);
 
@@ -528,7 +698,7 @@ useEffect(() => {
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 
       <button
-        onClick={() => setView('team')}
+        onClick={() => navigateTo('/jogadores')}
         className="flex items-center gap-2 text-neutral-400 hover:text-orange-500 transition-colors mb-8 font-bold uppercase tracking-widest text-sm"
       >
         <ArrowLeft className="w-4 h-4" />
@@ -537,7 +707,7 @@ useEffect(() => {
 
       <div className="bg-neutral-900 border border-neutral-800 p-8 md:p-12 mb-12 flex flex-col md:flex-row items-center md:items-end gap-8">
 
-        <div className="w-32 h-32 md:w-48 h-48 bg-neutral-800 border-2 border-orange-500 flex-shrink-0 flex items-center justify-center overflow-hidden">
+        <div className="w-32 h-32 md:w-48 md:h-48 bg-neutral-800 border-2 border-orange-500 flex-shrink-0 flex items-center justify-center overflow-hidden">
           {player.photo ? (
             <img
               src={player.photo}
@@ -594,13 +764,15 @@ useEffect(() => {
       </div>
 
       <div className="animate-fade-in">
+
         {loadingData ? (
           <div className="py-20 text-center text-neutral-500">
             A carregar dados do jogador...
           </div>
         ) : (
           <>
-            {/* ABA HISTÓRICO */}
+
+            {/* HISTÓRICO */}
             {activeTab === 'history' && (
               playerTournaments.length === 0 ? (
                 <EmptyState
@@ -610,28 +782,51 @@ useEffect(() => {
                 />
               ) : (
                 <div className="space-y-4">
-                  {playerTournaments.map(tp => (
-                    <div key={tp.id} className="bg-neutral-900 border border-neutral-800 p-5 md:p-6 flex flex-col md:flex-row items-center gap-6 hover:border-orange-500/50 transition-colors">
+                  {playerTournaments.map((tp) => (
+                    <div
+                      key={tp.id}
+                      className="bg-neutral-900 border border-neutral-800 p-5 md:p-6 flex flex-col md:flex-row items-center gap-6 hover:border-orange-500/50 transition-colors"
+                    >
                       <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 flex-shrink-0 flex items-center justify-center overflow-hidden">
                         {tp.tournament.image_url ? (
-                          <img src={tp.tournament.image_url} alt={tp.tournament.name} className="w-full h-full object-cover" />
+                          <img
+                            src={tp.tournament.image_url}
+                            alt={tp.tournament.name}
+                            className="w-full h-full object-cover"
+                          />
                         ) : (
                           <Trophy className="w-6 h-6 text-neutral-600" />
                         )}
                       </div>
 
                       <div className="flex-1 text-center md:text-left">
-                        <h4 className="text-lg font-bold text-white uppercase tracking-wider group-hover:text-orange-400 transition-colors">
+                        <h4 className="text-lg font-bold text-white uppercase tracking-wider">
                           {tp.tournament.name}
                         </h4>
+
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-2 text-xs text-neutral-500 uppercase tracking-widest">
-                          {tp.tournament.game?.name && <span className="text-orange-500">{tp.tournament.game.name}</span>}
-                          {tp.tournament.game?.name && <span>•</span>}
-                          <span>{new Date(`${tp.tournament.tournament_date}T12:00:00`).toLocaleDateString('pt-BR')}</span>
+                          {tp.tournament.game?.name && (
+                            <span className="text-orange-500">
+                              {tp.tournament.game.name}
+                            </span>
+                          )}
+
+                          {tp.tournament.game?.name && (
+                            <span>•</span>
+                          )}
+
+                          <span>
+                            {new Date(
+                              `${tp.tournament.tournament_date}T12:00:00`
+                            ).toLocaleDateString('pt-BR')}
+                          </span>
+
                           {tp.deck?.name && (
                             <>
                               <span>•</span>
-                              <span>Deck: {tp.deck.name}</span>
+                              <span>
+                                Deck: {tp.deck.name}
+                              </span>
                             </>
                           )}
                         </div>
@@ -640,22 +835,43 @@ useEffect(() => {
                       <div className="flex items-center gap-6 my-4 md:my-0">
                         <div className="text-center min-w-[60px]">
                           <span className="block text-2xl font-black italic text-white">
-                            {tp.placement ? `${tp.placement}º` : '-'}
+                            {tp.placement
+                              ? `${tp.placement}º`
+                              : '-'}
                           </span>
-                          <span className="text-[10px] uppercase tracking-widest text-neutral-600">Posição</span>
+
+                          <span className="text-[10px] uppercase tracking-widest text-neutral-600">
+                            Posição
+                          </span>
                         </div>
+
                         <div className="text-center min-w-[60px]">
                           <span className="block text-lg font-bold">
-                            <span className="text-green-400">{tp.wins}V</span>
-                            <span className="text-neutral-700 mx-1">/</span>
-                            <span className="text-red-400">{tp.losses}D</span>
+                            <span className="text-green-400">
+                              {tp.wins}V
+                            </span>
+
+                            <span className="text-neutral-700 mx-1">
+                              /
+                            </span>
+
+                            <span className="text-red-400">
+                              {tp.losses}D
+                            </span>
                           </span>
-                          <span className="text-[10px] uppercase tracking-widest text-neutral-600">Placar</span>
+
+                          <span className="text-[10px] uppercase tracking-widest text-neutral-600">
+                            Placar
+                          </span>
                         </div>
                       </div>
 
                       <button
-                        onClick={() => onOpenTournament(tp.tournament.id)}
+                        onClick={() =>
+                          onOpenTournament(
+                            tp.tournament.id
+                          )
+                        }
                         className="w-full md:w-auto px-6 py-3 border border-neutral-800 text-neutral-400 hover:text-orange-500 hover:border-orange-500/50 text-xs font-bold uppercase tracking-widest transition-colors"
                       >
                         Ver Torneio
@@ -666,7 +882,7 @@ useEffect(() => {
               )
             )}
 
-            {/* ABA DECKS */}
+            {/* DECKS */}
             {activeTab === 'decks' && (
               playerDecks.length === 0 ? (
                 <EmptyState
@@ -676,16 +892,25 @@ useEffect(() => {
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {playerDecks.map(deck => (
-                    <div key={deck.id} className="bg-neutral-900 border border-neutral-800 p-6 hover:border-orange-500 transition-colors flex flex-col h-full">
+                  {playerDecks.map((deck) => (
+                    <div
+                      key={deck.id}
+                      className="bg-neutral-900 border border-neutral-800 p-6 hover:border-orange-500 transition-colors flex flex-col h-full"
+                    >
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <h3 className="text-xl font-bold text-white uppercase tracking-wider">{deck.name}</h3>
-                          <p className="text-sm text-neutral-500 mt-1">{deck.game?.name || 'TCG'}</p>
+                          <h3 className="text-xl font-bold text-white uppercase tracking-wider">
+                            {deck.name}
+                          </h3>
+
+                          <p className="text-sm text-neutral-500 mt-1">
+                            {deck.game?.name || 'TCG'}
+                          </p>
                         </div>
+
                         <Layers className="text-neutral-600 w-6 h-6 flex-shrink-0" />
                       </div>
-                      
+
                       {deck.format && (
                         <div className="mb-6">
                           <span className="inline-block px-3 py-1 bg-neutral-950 border border-neutral-800 text-[10px] text-neutral-400 font-bold uppercase tracking-widest">
@@ -693,14 +918,19 @@ useEffect(() => {
                           </span>
                         </div>
                       )}
-                      
+
                       <div className="mt-auto pt-4">
                         {deck.decklist_image_url ? (
                           <button
-                            onClick={() => setDecklistImage(deck.decklist_image_url)}
+                            onClick={() =>
+                              setDecklistImage(
+                                deck.decklist_image_url
+                              )
+                            }
                             className="w-full py-3 border border-neutral-800 text-neutral-400 hover:text-orange-500 hover:border-orange-500/50 text-xs font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-2"
                           >
-                            Ver Decklist <ExternalLink className="w-4 h-4" />
+                            Ver Decklist
+                            <ExternalLink className="w-4 h-4" />
                           </button>
                         ) : (
                           <div className="w-full py-3 border border-neutral-800/50 text-neutral-600 text-xs font-bold uppercase tracking-widest text-center cursor-not-allowed">
@@ -714,7 +944,7 @@ useEffect(() => {
               )
             )}
 
-            {/* ABA ESTATÍSTICAS */}
+            {/* ESTATÍSTICAS */}
             {activeTab === 'stats' && (
               playerTournaments.length === 0 ? (
                 <EmptyState
@@ -724,34 +954,68 @@ useEffect(() => {
                 />
               ) : (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-white italic">{stats.totalTournaments}</p>
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">Torneios Disputados</p>
-                  </div>
-                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-orange-500 italic">{stats.winRate}%</p>
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">Taxa de Vitória</p>
-                  </div>
+
                   <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
                     <p className="text-3xl md:text-4xl font-black text-white italic">
-                      <span className="text-green-400">{stats.totalWins}</span>
-                      <span className="text-neutral-700 mx-1">-</span>
-                      <span className="text-red-400">{stats.totalLosses}</span>
+                      {stats.totalTournaments}
                     </p>
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">Vitórias / Derrotas</p>
+
+                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                      Torneios Disputados
+                    </p>
                   </div>
+
                   <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-neutral-300 italic">{stats.bestPlacement ? `${stats.bestPlacement}º` : '-'}</p>
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">Melhor Colocação</p>
+                    <p className="text-3xl md:text-4xl font-black text-orange-500 italic">
+                      {stats.winRate}%
+                    </p>
+
+                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                      Taxa de Vitória
+                    </p>
                   </div>
+
+                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
+                    <p className="text-3xl md:text-4xl font-black text-white italic">
+                      <span className="text-green-400">
+                        {stats.totalWins}
+                      </span>
+
+                      <span className="text-neutral-700 mx-1">
+                        -
+                      </span>
+
+                      <span className="text-red-400">
+                        {stats.totalLosses}
+                      </span>
+                    </p>
+
+                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                      Vitórias / Derrotas
+                    </p>
+                  </div>
+
+                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
+                    <p className="text-3xl md:text-4xl font-black text-neutral-300 italic">
+                      {stats.bestPlacement
+                        ? `${stats.bestPlacement}º`
+                        : '-'}
+                    </p>
+
+                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                      Melhor Colocação
+                    </p>
+                  </div>
+
                 </div>
               )
             )}
+
           </>
         )}
       </div>
 
-      {/* Modal da decklist (idêntico ao do torneio) */}
+      {/* Modal decklist */}
       {decklistImage && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
@@ -759,11 +1023,15 @@ useEffect(() => {
         >
           <div
             className="relative max-w-5xl max-h-[90vh]"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
             <button
               type="button"
-              onClick={() => setDecklistImage(null)}
+              onClick={() =>
+                setDecklistImage(null)
+              }
               className="absolute -top-12 right-0 w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-orange-500 hover:border-orange-500 transition-colors"
               aria-label="Fechar decklist"
             >
@@ -782,16 +1050,16 @@ useEffect(() => {
   );
 };
 
+/* =========================================================
+   JOGOS
+========================================================= */
+
 const GamesView = ({
   players,
   loading,
-  setView,
-  setActivePlayer,
 }: {
   players: PublicPlayer[];
   loading: boolean;
-  setView: React.Dispatch<React.SetStateAction<View>>;
-  setActivePlayer: React.Dispatch<React.SetStateAction<PublicPlayer | null>>;
 }) => {
 
   const games = Array.from(
@@ -825,8 +1093,9 @@ const GamesView = ({
         <div className="space-y-16">
           {games.map((game) => {
 
-            const gamePlayers = players.filter((player) =>
-              player.games.includes(game)
+            const gamePlayers = players.filter(
+              (player) =>
+                player.games.includes(game)
             );
 
             return (
@@ -846,18 +1115,20 @@ const GamesView = ({
 
                 <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {gamePlayers.map((player) => (
-                    <div
+                    <button
                       key={player.id}
-                      onClick={() => {
-                        setActivePlayer(player);
-                        setView('playerDetails');
-                      }}
+                      type="button"
+                      onClick={() =>
+                        navigateTo(
+                          `/jogador/${player.slug}`
+                        )
+                      }
                       className="cursor-pointer bg-neutral-950 p-4 border border-neutral-800 hover:border-orange-500 transition-colors text-center group"
                     >
                       <p className="font-bold text-sm text-neutral-300 group-hover:text-orange-400 transition-colors">
                         {player.name}
                       </p>
-                    </div>
+                    </button>
                   ))}
                 </div>
               </div>
@@ -869,12 +1140,19 @@ const GamesView = ({
   );
 };
 
+/* =========================================================
+   TORNEIOS
+========================================================= */
+
 const TournamentsView = ({
   onOpenTournament,
 }: {
   onOpenTournament: (id: string) => void;
 }) => {
-  const [tournaments, setTournaments] = useState<PublicTournament[]>([]);
+  const [tournaments, setTournaments] = useState<
+    PublicTournament[]
+  >([]);
+
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -896,10 +1174,16 @@ const TournamentsView = ({
           )
         `)
         .eq('status', 'approved')
-        .order('tournament_date', { ascending: false });
+        .order('tournament_date', {
+          ascending: false,
+        });
 
       if (error) {
-        console.error('Erro ao carregar torneios:', error);
+        console.error(
+          'Erro ao carregar torneios:',
+          error
+        );
+
         setTournaments([]);
       } else {
         setTournaments(
@@ -919,7 +1203,9 @@ const TournamentsView = ({
   }, []);
 
   function formatDate(date: string) {
-    return new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', {
+    return new Date(
+      `${date}T12:00:00`
+    ).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
@@ -951,14 +1237,18 @@ const TournamentsView = ({
         />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
           {tournaments.map((tournament) => (
             <button
               key={tournament.id}
               type="button"
-              onClick={() => onOpenTournament(tournament.id)}
+              onClick={() =>
+                onOpenTournament(tournament.id)
+              }
               className="group text-left bg-neutral-900 border border-neutral-800 hover:border-orange-500 transition-all overflow-hidden"
             >
               <div className="h-52 bg-neutral-800 relative overflow-hidden">
+
                 {tournament.image_url ? (
                   <img
                     src={tournament.image_url}
@@ -981,36 +1271,52 @@ const TournamentsView = ({
               </div>
 
               <div className="p-6">
+
                 <h3 className="text-xl font-black text-white uppercase tracking-wide group-hover:text-orange-400 transition-colors mb-4">
                   {tournament.name}
                 </h3>
 
                 <div className="space-y-2 text-sm text-neutral-500">
+
                   <div className="flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-orange-500" />
-                    <span>{formatDate(tournament.tournament_date)}</span>
+                    <span>
+                      {formatDate(
+                        tournament.tournament_date
+                      )}
+                    </span>
                   </div>
 
                   {tournament.location && (
                     <div className="flex items-center gap-2">
                       <MapPin className="w-4 h-4 text-orange-500" />
-                      <span>{tournament.location}</span>
+                      <span>
+                        {tournament.location}
+                      </span>
                     </div>
                   )}
+
                 </div>
 
                 <div className="mt-6 flex items-center gap-2 text-orange-500 text-xs font-bold uppercase tracking-widest">
                   Ver torneio
+
                   <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </div>
+
               </div>
             </button>
           ))}
+
         </div>
       )}
     </div>
   );
 };
+
+/* =========================================================
+   DETALHES DO TORNEIO
+========================================================= */
 
 const TournamentDetailsView = ({
   tournamentId,
@@ -1021,23 +1327,39 @@ const TournamentDetailsView = ({
   onBack: () => void;
   onOpenPlayer: (playerId: string) => void;
 }) => {
-  const [tournament, setTournament] = useState<PublicTournament | null>(null);
-  const [participants, setParticipants] = useState<TournamentParticipant[]>([]);
-  const [matches, setMatches] = useState<PublicMatch[]>([]);
-  
-  const [loading, setLoading] = useState(true);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [decklistImage, setDecklistImage] = useState<string | null>(null);
-  
-  const [activeTab, setActiveTab] = useState<'standings' | 'matches'>('standings');
+  const [tournament, setTournament] =
+    useState<PublicTournament | null>(null);
+
+  const [participants, setParticipants] =
+    useState<TournamentParticipant[]>([]);
+
+  const [matches, setMatches] =
+    useState<PublicMatch[]>([]);
+
+  const [loading, setLoading] =
+    useState(true);
+
+  const [errorMessage, setErrorMessage] =
+    useState('');
+
+  const [decklistImage, setDecklistImage] =
+    useState<string | null>(null);
+
+  const [activeTab, setActiveTab] =
+    useState<'standings' | 'matches'>(
+      'standings'
+    );
 
   useEffect(() => {
     async function loadTournament() {
       setLoading(true);
       setErrorMessage('');
 
-      // 1. Carregar Torneio
-      const { data: tournamentData, error: tournamentError } = await supabase
+      /* Torneio */
+      const {
+        data: tournamentData,
+        error: tournamentError,
+      } = await supabase
         .from('tournaments')
         .select(`
           id,
@@ -1055,96 +1377,153 @@ const TournamentDetailsView = ({
         .eq('status', 'approved')
         .single();
 
-      if (tournamentError || !tournamentData) {
+      if (
+        tournamentError ||
+        !tournamentData
+      ) {
         setTournament(null);
         setParticipants([]);
         setMatches([]);
-        setErrorMessage('Não foi possível encontrar este torneio.');
+
+        setErrorMessage(
+          'Não foi possível encontrar este torneio.'
+        );
+
         setLoading(false);
         return;
       }
 
       const normalizedTournament: PublicTournament = {
         ...tournamentData,
-        game: Array.isArray((tournamentData as any).game)
-          ? (tournamentData as any).game[0] || null
-          : (tournamentData as any).game || null,
+        game: Array.isArray(
+          (tournamentData as any).game
+        )
+          ? (tournamentData as any).game[0] ||
+            null
+          : (tournamentData as any).game ||
+            null,
       };
 
-      setTournament(normalizedTournament);
-
-      // 2. Carregar Participantes (Classificação)
-      const { data: participantsData } = await supabase
-        .from('tournament_players')
-        .select(`
-          id,
-          player_id,
-          deck_id,
-          placement,
-          wins,
-          losses,
-          player:players (
-            id,
-            name,
-            slug,
-            photo_url
-          ),
-          deck:decks (
-            id,
-            name,
-            format,
-            image_url,
-            decklist_image_url
-          )
-        `)
-        .eq('tournament_id', tournamentId)
-        .order('placement', {
-          ascending: true,
-          nullsFirst: false,
-        });
-
-      setParticipants(
-        (participantsData || []).map((item: any) => ({
-          ...item,
-          player: Array.isArray(item.player) ? item.player[0] || null : item.player || null,
-          deck: Array.isArray(item.deck) ? item.deck[0] || null : item.deck || null,
-        }))
+      setTournament(
+        normalizedTournament
       );
 
-      // 3. Carregar Partidas (Matches)
-      const { data: matchesData } = await supabase
-        .from('matches')
-        .select(`
-          id,
-          round,
-          opponent_name,
-          opponent_deck,
-          result,
-          player_score,
-          opponent_score,
-          tournament_player:tournament_players (
+      /* Participantes */
+      const { data: participantsData } =
+        await supabase
+          .from('tournament_players')
+          .select(`
+            id,
+            player_id,
+            deck_id,
+            placement,
+            wins,
+            losses,
             player:players (
               id,
               name,
+              slug,
               photo_url
             ),
             deck:decks (
-              name
+              id,
+              name,
+              format,
+              image_url,
+              decklist_image_url
             )
+          `)
+          .eq(
+            'tournament_id',
+            tournamentId
           )
-        `)
-        .eq('tournament_id', tournamentId)
-        .order('round', { ascending: true });
+          .order('placement', {
+            ascending: true,
+            nullsFirst: false,
+          });
 
-      const normalizedMatches = (matchesData || []).map((m: any) => {
-        const tp = Array.isArray(m.tournament_player) ? m.tournament_player[0] : m.tournament_player;
-        const player = tp ? (Array.isArray(tp.player) ? tp.player[0] : tp.player) : null;
-        const deck = tp ? (Array.isArray(tp.deck) ? tp.deck[0] : tp.deck) : null;
-        return {
-          ...m,
-          tournament_player: tp ? { player, deck } : null,
-        };
-      });
+      setParticipants(
+        (participantsData || []).map(
+          (item: any) => ({
+            ...item,
+            player: Array.isArray(
+              item.player
+            )
+              ? item.player[0] || null
+              : item.player || null,
+
+            deck: Array.isArray(
+              item.deck
+            )
+              ? item.deck[0] || null
+              : item.deck || null,
+          })
+        )
+      );
+
+      /* Partidas */
+      const { data: matchesData } =
+        await supabase
+          .from('matches')
+          .select(`
+            id,
+            round,
+            opponent_name,
+            opponent_deck,
+            result,
+            player_score,
+            opponent_score,
+            tournament_player:tournament_players (
+              player:players (
+                id,
+                name,
+                photo_url
+              ),
+              deck:decks (
+                name
+              )
+            )
+          `)
+          .eq(
+            'tournament_id',
+            tournamentId
+          )
+          .order('round', {
+            ascending: true,
+          });
+
+      const normalizedMatches =
+        (matchesData || []).map(
+          (m: any) => {
+            const tp = Array.isArray(
+              m.tournament_player
+            )
+              ? m.tournament_player[0]
+              : m.tournament_player;
+
+            const player = tp
+              ? Array.isArray(tp.player)
+                ? tp.player[0]
+                : tp.player
+              : null;
+
+            const deck = tp
+              ? Array.isArray(tp.deck)
+                ? tp.deck[0]
+                : tp.deck
+              : null;
+
+            return {
+              ...m,
+              tournament_player: tp
+                ? {
+                    player,
+                    deck,
+                  }
+                : null,
+            };
+          }
+        );
 
       setMatches(normalizedMatches);
       setLoading(false);
@@ -1154,7 +1533,9 @@ const TournamentDetailsView = ({
   }, [tournamentId]);
 
   function formatDate(date: string) {
-    return new Date(`${date}T12:00:00`).toLocaleDateString('pt-BR', {
+    return new Date(
+      `${date}T12:00:00`
+    ).toLocaleDateString('pt-BR', {
       day: '2-digit',
       month: 'long',
       year: 'numeric',
@@ -1174,6 +1555,7 @@ const TournamentDetailsView = ({
   if (!tournament) {
     return (
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+
         <button
           onClick={onBack}
           className="flex items-center gap-2 text-neutral-400 hover:text-orange-500 transition-colors mb-10 font-bold uppercase tracking-widest text-sm"
@@ -1211,6 +1593,7 @@ const TournamentDetailsView = ({
         <div className="relative bg-neutral-900 border border-neutral-800 overflow-hidden mb-12">
 
           <div className="h-72 md:h-96 bg-neutral-800 relative overflow-hidden">
+
             {tournament.image_url ? (
               <img
                 src={tournament.image_url}
@@ -1230,9 +1613,11 @@ const TournamentDetailsView = ({
                 {tournament.game.name}
               </span>
             )}
+
           </div>
 
           <div className="relative p-8 md:p-12 -mt-20">
+
             <h1 className="text-4xl md:text-6xl font-black text-white uppercase italic tracking-tighter mb-6">
               {tournament.name}
             </h1>
@@ -1241,13 +1626,19 @@ const TournamentDetailsView = ({
 
               <div className="flex items-center gap-2">
                 <Calendar className="w-5 h-5 text-orange-500" />
-                <span>{formatDate(tournament.tournament_date)}</span>
+                <span>
+                  {formatDate(
+                    tournament.tournament_date
+                  )}
+                </span>
               </div>
 
               {tournament.location && (
                 <div className="flex items-center gap-2">
                   <MapPin className="w-5 h-5 text-orange-500" />
-                  <span>{tournament.location}</span>
+                  <span>
+                    {tournament.location}
+                  </span>
                 </div>
               )}
 
@@ -1268,13 +1659,17 @@ const TournamentDetailsView = ({
                 {tournament.description}
               </p>
             )}
+
           </div>
         </div>
 
-        {/* ABAS */}
+        {/* Abas */}
         <div className="flex border-b border-neutral-800 mb-8 overflow-x-auto">
+
           <button
-            onClick={() => setActiveTab('standings')}
+            onClick={() =>
+              setActiveTab('standings')
+            }
             className={`px-8 py-4 text-sm font-bold uppercase tracking-widest whitespace-nowrap transition-colors ${
               activeTab === 'standings'
                 ? 'text-orange-500 border-b-2 border-orange-500 bg-orange-500/5'
@@ -1283,8 +1678,11 @@ const TournamentDetailsView = ({
           >
             Classificação Final
           </button>
+
           <button
-            onClick={() => setActiveTab('matches')}
+            onClick={() =>
+              setActiveTab('matches')
+            }
             className={`px-8 py-4 text-sm font-bold uppercase tracking-widest whitespace-nowrap transition-colors ${
               activeTab === 'matches'
                 ? 'text-orange-500 border-b-2 border-orange-500 bg-orange-500/5'
@@ -1293,15 +1691,15 @@ const TournamentDetailsView = ({
           >
             Histórico de Partidas
           </button>
+
         </div>
 
         <div className="animate-fade-in">
-          
-          {/* =======================
-              ABA: CLASSIFICAÇÃO
-          ======================== */}
+
+          {/* CLASSIFICAÇÃO */}
           {activeTab === 'standings' && (
             <section>
+
               {participants.length === 0 ? (
                 <EmptyState
                   icon={Users}
@@ -1311,7 +1709,6 @@ const TournamentDetailsView = ({
               ) : (
                 <div className="border border-neutral-800 bg-neutral-900 overflow-hidden">
 
-                  {/* Cabeçalho da tabela */}
                   <div className="hidden md:grid grid-cols-[80px_1fr_220px_140px_120px] gap-4 px-6 py-4 border-b border-neutral-800 bg-neutral-950 text-[10px] font-black uppercase tracking-widest text-neutral-600">
                     <span>Pos.</span>
                     <span>Jogador</span>
@@ -1320,157 +1717,192 @@ const TournamentDetailsView = ({
                     <span></span>
                   </div>
 
-                  {participants.map((participant, index) => (
-                    <div
-                      key={participant.id}
-                      className="grid grid-cols-1 md:grid-cols-[80px_1fr_220px_140px_120px] gap-4 md:gap-4 items-center px-5 md:px-6 py-5 border-b border-neutral-800 last:border-b-0 hover:bg-neutral-800/30 transition-colors"
-                    >
-
-                      {/* Colocação */}
-                      <div className="flex items-center gap-3">
-                        <span
-                          className={`text-2xl font-black italic ${
-                            participant.placement === 1
-                              ? 'text-orange-400'
-                              : participant.placement === 2
-                              ? 'text-neutral-300'
-                              : participant.placement === 3
-                              ? 'text-orange-700'
-                              : 'text-neutral-600'
-                          }`}
-                        >
-                          {participant.placement
-                            ? `${participant.placement}º`
-                            : '—'}
-                        </span>
-
-                        {index < 3 && participant.placement && (
-                          <Trophy className="w-4 h-4 text-orange-500" />
-                        )}
-                      </div>
-
-                      {/* Jogador */}
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (participant.player) {
-                            onOpenPlayer(participant.player.id);
-                          }
-                        }}
-                        disabled={!participant.player}
-                        className="flex items-center gap-4 text-left group disabled:cursor-default"
+                  {participants.map(
+                    (participant, index) => (
+                      <div
+                        key={participant.id}
+                        className="grid grid-cols-1 md:grid-cols-[80px_1fr_220px_140px_120px] gap-4 md:gap-4 items-center px-5 md:px-6 py-5 border-b border-neutral-800 last:border-b-0 hover:bg-neutral-800/30 transition-colors"
                       >
-                        <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 flex-shrink-0 overflow-hidden">
-                          {participant.player?.photo_url ? (
-                            <img
-                              src={participant.player.photo_url}
-                              alt={participant.player.name}
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex items-center justify-center">
-                              <Users className="w-5 h-5 text-neutral-600" />
+
+                        {/* Colocação */}
+                        <div className="flex items-center gap-3">
+                          <span
+                            className={`text-2xl font-black italic ${
+                              participant.placement === 1
+                                ? 'text-orange-400'
+                                : participant.placement === 2
+                                ? 'text-neutral-300'
+                                : participant.placement === 3
+                                ? 'text-orange-700'
+                                : 'text-neutral-600'
+                            }`}
+                          >
+                            {participant.placement
+                              ? `${participant.placement}º`
+                              : '—'}
+                          </span>
+
+                          {index < 3 &&
+                            participant.placement && (
+                              <Trophy className="w-4 h-4 text-orange-500" />
+                            )}
+                        </div>
+
+                        {/* Jogador */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (
+                              participant.player
+                            ) {
+                              onOpenPlayer(
+                                participant.player.id
+                              );
+                            }
+                          }}
+                          disabled={
+                            !participant.player
+                          }
+                          className="flex items-center gap-4 text-left group disabled:cursor-default"
+                        >
+                          <div className="w-12 h-12 bg-neutral-800 border border-neutral-700 flex-shrink-0 overflow-hidden">
+
+                            {participant.player
+                              ?.photo_url ? (
+                              <img
+                                src={
+                                  participant.player
+                                    .photo_url
+                                }
+                                alt={
+                                  participant.player
+                                    .name
+                                }
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Users className="w-5 h-5 text-neutral-600" />
+                              </div>
+                            )}
+
+                          </div>
+
+                          <div>
+                            <p className="font-bold text-white group-hover:text-orange-400 transition-colors">
+                              {participant.player
+                                ?.name ||
+                                'Jogador'}
+                            </p>
+
+                            <p className="text-xs text-neutral-600 uppercase tracking-wider mt-1">
+                              Torega TCG
+                            </p>
+                          </div>
+                        </button>
+
+                        {/* Deck */}
+                        <div>
+                          {participant.deck ? (
+                            <div>
+
+                              <p className="text-sm font-bold text-neutral-200">
+                                {participant.deck.name}
+                              </p>
+
+                              {participant.deck.format && (
+                                <p className="text-xs text-neutral-600 uppercase tracking-wider mt-1">
+                                  {participant.deck.format}
+                                </p>
+                              )}
+
+                              {participant.deck
+                                .decklist_image_url && (
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setDecklistImage(
+                                      participant
+                                        .deck
+                                        ?.decklist_image_url ||
+                                        null
+                                    )
+                                  }
+                                  className="mt-2 text-[10px] font-bold uppercase tracking-widest text-orange-500 hover:text-orange-400 flex items-center gap-1"
+                                >
+                                  Ver decklist
+                                  <ExternalLink className="w-3 h-3" />
+                                </button>
+                              )}
+
                             </div>
+                          ) : (
+                            <span className="text-sm text-neutral-600">
+                              Nenhum deck registrado
+                            </span>
                           )}
                         </div>
 
+                        {/* Resultado */}
                         <div>
-                          <p className="font-bold text-white group-hover:text-orange-400 transition-colors">
-                            {participant.player?.name || 'Jogador'}
-                          </p>
+                          <div className="flex items-center gap-3">
 
-                          <p className="text-xs text-neutral-600 uppercase tracking-wider mt-1">
-                            Torega TCG
-                          </p>
-                        </div>
-                      </button>
+                            <span className="text-sm font-bold text-green-400">
+                              {participant.wins}V
+                            </span>
 
-                      {/* Deck */}
-                      <div>
-                        {participant.deck ? (
-                          <div>
-                            <p className="text-sm font-bold text-neutral-200">
-                              {participant.deck.name}
-                            </p>
+                            <span className="text-neutral-700">
+                              /
+                            </span>
 
-                            {participant.deck.format && (
-                              <p className="text-xs text-neutral-600 uppercase tracking-wider mt-1">
-                                {participant.deck.format}
-                              </p>
-                            )}
+                            <span className="text-sm font-bold text-red-400">
+                              {participant.losses}D
+                            </span>
 
-                            {participant.deck.decklist_image_url && (
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setDecklistImage(
-                                    participant.deck?.decklist_image_url || null
-                                  )
-                                }
-                                className="mt-2 text-[10px] font-bold uppercase tracking-widest text-orange-500 hover:text-orange-400 flex items-center gap-1"
-                              >
-                                Ver decklist
-                                <ExternalLink className="w-3 h-3" />
-                              </button>
-                            )}
                           </div>
-                        ) : (
-                          <span className="text-sm text-neutral-600">
-                            Nenhum deck registrado
-                          </span>
-                        )}
-                      </div>
 
-                      {/* Resultado */}
-                      <div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-sm font-bold text-green-400">
-                            {participant.wins}V
-                          </span>
-
-                          <span className="text-neutral-700">
-                            /
-                          </span>
-
-                          <span className="text-sm font-bold text-red-400">
-                            {participant.losses}D
-                          </span>
+                          <p className="text-[10px] uppercase tracking-widest text-neutral-700 mt-1">
+                            Resultado
+                          </p>
                         </div>
 
-                        <p className="text-[10px] uppercase tracking-widest text-neutral-700 mt-1">
-                          Resultado
-                        </p>
-                      </div>
+                        {/* Ação */}
+                        <div className="flex md:justify-end">
 
-                      {/* Ação */}
-                      <div className="flex md:justify-end">
-                        {participant.deck?.decklist_image_url && (
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setDecklistImage(
-                                participant.deck?.decklist_image_url || null
-                              )
-                            }
-                            className="px-3 py-2 border border-neutral-800 text-neutral-500 hover:text-orange-500 hover:border-orange-500/50 text-[10px] font-bold uppercase tracking-widest transition-colors"
-                          >
-                            Decklist
-                          </button>
-                        )}
-                      </div>
+                          {participant.deck
+                            ?.decklist_image_url && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setDecklistImage(
+                                  participant
+                                    .deck
+                                    ?.decklist_image_url ||
+                                    null
+                                )
+                              }
+                              className="px-3 py-2 border border-neutral-800 text-neutral-500 hover:text-orange-500 hover:border-orange-500/50 text-[10px] font-bold uppercase tracking-widest transition-colors"
+                            >
+                              Decklist
+                            </button>
+                          )}
 
-                    </div>
-                  ))}
+                        </div>
+
+                      </div>
+                    )
+                  )}
+
                 </div>
               )}
+
             </section>
           )}
 
-          {/* =======================
-              ABA: PARTIDAS (MATCHES)
-          ======================== */}
+          {/* PARTIDAS */}
           {activeTab === 'matches' && (
             <section>
+
               {matches.length === 0 ? (
                 <EmptyState
                   icon={Swords}
@@ -1479,66 +1911,134 @@ const TournamentDetailsView = ({
                 />
               ) : (
                 <div className="border border-neutral-800 bg-neutral-900 overflow-hidden">
-                  
-                  {/* Cabeçalho */}
+
                   <div className="hidden md:grid grid-cols-[80px_1fr_120px_1fr_100px] gap-6 px-6 py-4 border-b border-neutral-800 bg-neutral-950 text-[10px] font-black uppercase tracking-widest text-neutral-600">
                     <span>Rodada</span>
-                    <span className="text-right">Torega TCG</span>
-                    <span className="text-center">Placar</span>
+                    <span className="text-right">
+                      Torega TCG
+                    </span>
+                    <span className="text-center">
+                      Placar
+                    </span>
                     <span>Adversário</span>
-                    <span className="text-right">Resultado</span>
+                    <span className="text-right">
+                      Resultado
+                    </span>
                   </div>
 
                   {matches.map((match) => (
-                    <div key={match.id} className="flex flex-col md:grid md:grid-cols-[80px_1fr_120px_1fr_100px] gap-4 md:gap-6 px-6 py-5 border-b border-neutral-800 last:border-b-0 hover:bg-neutral-800/30 transition-colors items-center">
-                      
+                    <div
+                      key={match.id}
+                      className="flex flex-col md:grid md:grid-cols-[80px_1fr_120px_1fr_100px] gap-4 md:gap-6 px-6 py-5 border-b border-neutral-800 last:border-b-0 hover:bg-neutral-800/30 transition-colors items-center"
+                    >
+
                       {/* Rodada */}
-                      <div className="w-full md:w-auto text-left md:text-left">
-                        <span className="text-2xl font-black italic text-neutral-600">R{match.round}</span>
+                      <div className="w-full md:w-auto text-left">
+                        <span className="text-2xl font-black italic text-neutral-600">
+                          R{match.round}
+                        </span>
                       </div>
 
-                      {/* Jogador do Torega (Lado Esquerdo) */}
+                      {/* Torega */}
                       <div className="w-full flex md:justify-end items-center gap-4">
+
                         <div className="text-left md:text-right flex-1">
-                          <p className="font-bold text-white text-lg">{match.tournament_player?.player?.name || 'Jogador'}</p>
-                          <p className="text-[10px] text-orange-500 uppercase tracking-widest mt-1">
-                            {match.tournament_player?.deck?.name || 'Deck Desconhecido'}
+
+                          <p className="font-bold text-white text-lg">
+                            {match.tournament_player
+                              ?.player?.name ||
+                              'Jogador'}
                           </p>
+
+                          <p className="text-[10px] text-orange-500 uppercase tracking-widest mt-1">
+                            {match.tournament_player
+                              ?.deck?.name ||
+                              'Deck Desconhecido'}
+                          </p>
+
                         </div>
+
                         <div className="hidden md:block w-12 h-12 bg-neutral-800 border border-neutral-700 overflow-hidden shrink-0">
-                          {match.tournament_player?.player?.photo_url ? (
-                            <img src={match.tournament_player.player.photo_url} alt="Jogador" className="w-full h-full object-cover" />
+
+                          {match.tournament_player
+                            ?.player
+                            ?.photo_url ? (
+                            <img
+                              src={
+                                match
+                                  .tournament_player
+                                  .player
+                                  .photo_url
+                              }
+                              alt="Jogador"
+                              className="w-full h-full object-cover"
+                            />
                           ) : (
-                            <div className="w-full h-full flex items-center justify-center"><Users className="w-5 h-5 text-neutral-600" /></div>
+                            <div className="w-full h-full flex items-center justify-center">
+                              <Users className="w-5 h-5 text-neutral-600" />
+                            </div>
                           )}
+
                         </div>
+
                       </div>
 
-                      {/* Placar (Centro) */}
+                      {/* Placar */}
                       <div className="w-full md:w-auto flex justify-center items-center py-2 md:py-0 border-y border-neutral-800 md:border-y-0">
+
                         <div className="text-3xl font-black italic flex gap-3">
-                          <span className={match.player_score >= match.opponent_score ? 'text-white' : 'text-neutral-600'}>
+
+                          <span
+                            className={
+                              match.player_score >=
+                              match.opponent_score
+                                ? 'text-white'
+                                : 'text-neutral-600'
+                            }
+                          >
                             {match.player_score}
                           </span>
-                          <span className="text-neutral-700">-</span>
-                          <span className={match.opponent_score >= match.player_score ? 'text-white' : 'text-neutral-600'}>
+
+                          <span className="text-neutral-700">
+                            -
+                          </span>
+
+                          <span
+                            className={
+                              match.opponent_score >=
+                              match.player_score
+                                ? 'text-white'
+                                : 'text-neutral-600'
+                            }
+                          >
                             {match.opponent_score}
                           </span>
+
                         </div>
+
                       </div>
 
-                      {/* Adversário (Lado Direito) */}
+                      {/* Adversário */}
                       <div className="w-full flex justify-start items-center gap-4">
+
                         <div className="text-left flex-1">
-                          <p className="font-bold text-neutral-300 text-lg">{match.opponent_name}</p>
-                          <p className="text-[10px] text-neutral-500 uppercase tracking-widest mt-1">
-                            {match.opponent_deck || 'Deck Desconhecido'}
+
+                          <p className="font-bold text-neutral-300 text-lg">
+                            {match.opponent_name}
                           </p>
+
+                          <p className="text-[10px] text-neutral-500 uppercase tracking-widest mt-1">
+                            {match.opponent_deck ||
+                              'Deck Desconhecido'}
+                          </p>
+
                         </div>
+
                       </div>
 
-                      {/* Resultado da Partida (Direita Extrema) */}
+                      {/* Resultado */}
                       <div className="w-full md:w-auto text-left md:text-right mt-2 md:mt-0">
+
                         {match.result === 'win' ? (
                           <span className="inline-block px-3 py-1 bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black uppercase tracking-widest">
                             Vitória
@@ -1548,6 +2048,7 @@ const TournamentDetailsView = ({
                             Derrota
                           </span>
                         )}
+
                       </div>
 
                     </div>
@@ -1555,6 +2056,7 @@ const TournamentDetailsView = ({
 
                 </div>
               )}
+
             </section>
           )}
 
@@ -1562,19 +2064,26 @@ const TournamentDetailsView = ({
 
       </div>
 
-      {/* Modal da decklist */}
+      {/* Modal decklist */}
       {decklistImage && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
-          onClick={() => setDecklistImage(null)}
+          onClick={() =>
+            setDecklistImage(null)
+          }
         >
           <div
             className="relative max-w-5xl max-h-[90vh]"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(event) =>
+              event.stopPropagation()
+            }
           >
+
             <button
               type="button"
-              onClick={() => setDecklistImage(null)}
+              onClick={() =>
+                setDecklistImage(null)
+              }
               className="absolute -top-12 right-0 w-10 h-10 flex items-center justify-center bg-neutral-900 border border-neutral-700 text-neutral-300 hover:text-orange-500 hover:border-orange-500 transition-colors"
               aria-label="Fechar decklist"
             >
@@ -1586,17 +2095,24 @@ const TournamentDetailsView = ({
               alt="Decklist"
               className="max-w-full max-h-[85vh] object-contain border border-neutral-800"
             />
+
           </div>
         </div>
       )}
+
     </>
   );
 };
+
+/* =========================================================
+   HISTÓRIA
+========================================================= */
 
 const HistoryView = () => (
   <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 
     <div className="mb-16 text-center">
+
       <History className="w-16 h-16 text-orange-500 mx-auto mb-6" />
 
       <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-wider italic">
@@ -1606,6 +2122,7 @@ const HistoryView = () => (
       <p className="text-xl text-neutral-400 mt-4">
         A trajetória do Torega TCG.
       </p>
+
     </div>
 
     <EmptyState
@@ -1613,13 +2130,19 @@ const HistoryView = () => (
       title="História em construção"
       message="Os acontecimentos históricos do Torega TCG serão registrados aqui."
     />
+
   </div>
 );
+
+/* =========================================================
+   NOTÍCIAS
+========================================================= */
 
 const NewsView = () => (
   <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
 
     <div className="mb-16 border-l-4 border-orange-500 pl-6">
+
       <h2 className="text-4xl md:text-5xl font-black text-white uppercase tracking-wider italic">
         Notícias
       </h2>
@@ -1627,40 +2150,72 @@ const NewsView = () => (
       <p className="text-xl text-neutral-400 mt-2">
         Acompanhe as últimas novidades e resultados do time.
       </p>
+
     </div>
 
     <div className="mt-20">
+
       <EmptyState
         icon={Newspaper}
         title="Nenhuma Notícia Publicada"
         message="Fique de olho. Anúncios oficiais, coberturas de eventos e resultados serão publicados aqui."
       />
+
     </div>
+
   </div>
 );
 
+/* =========================================================
+   APP
+========================================================= */
+
 export default function App() {
-  const [currentView, setCurrentView] = useState<View>('home');
+
+  const initialRoute = getRouteFromPathname(
+    window.location.pathname
+  );
+
+  const [currentView, setCurrentView] =
+    useState<View>(initialRoute.view);
 
   const [activePlayer, setActivePlayer] =
     useState<PublicPlayer | null>(null);
 
-  const [players, setPlayers] = useState<PublicPlayer[]>([]);
-  const [playersLoading, setPlayersLoading] = useState(true);
+  const [players, setPlayers] =
+    useState<PublicPlayer[]>([]);
+
+  const [playersLoading, setPlayersLoading] =
+    useState(true);
 
   const [selectedTournamentId, setSelectedTournamentId] =
-    useState<string | null>(null);
+    useState<string | null>(
+      initialRoute.tournamentId
+    );
+
+  const [selectedPlayerSlug, setSelectedPlayerSlug] =
+    useState<string | null>(
+      initialRoute.playerSlug
+    );
 
   const [adminMode] = useState(
     window.location.pathname === '/admin'
   );
 
-  const [user, setUser] = useState<any>(null);
-  const [checkingAuth, setCheckingAuth] = useState(true);
+  const [user, setUser] =
+    useState<any>(null);
+
+  const [checkingAuth, setCheckingAuth] =
+    useState(true);
+
+  /* =====================================================
+     AUTH
+  ===================================================== */
 
   useEffect(() => {
     async function checkAuth() {
-      const currentUser = await getCurrentUser();
+      const currentUser =
+        await getCurrentUser();
 
       setUser(currentUser);
       setCheckingAuth(false);
@@ -1669,11 +2224,17 @@ export default function App() {
     checkAuth();
   }, []);
 
+  /* =====================================================
+     JOGADORES
+  ===================================================== */
+
   useEffect(() => {
     async function loadPublicPlayers() {
+
       setPlayersLoading(true);
 
-      const data = await getPlayers();
+      const data =
+        await getPlayers();
 
       setPlayers(data);
       setPlayersLoading(false);
@@ -1682,87 +2243,126 @@ export default function App() {
     loadPublicPlayers();
   }, []);
 
+  /* =====================================================
+     SINCRONIZAÇÃO DA URL
+  ===================================================== */
+
   useEffect(() => {
+
     function handlePopState() {
-      const pathname = window.location.pathname;
 
-      if (pathname.startsWith('/torneio/')) {
-        const tournamentId = pathname.split('/torneio/')[1];
+      const route =
+        getRouteFromPathname(
+          window.location.pathname
+        );
 
-        if (tournamentId) {
-          setSelectedTournamentId(tournamentId);
-          setCurrentView('tournamentDetails');
-          return;
-        }
-      }
+      setCurrentView(route.view);
 
-      setSelectedTournamentId(null);
+      setSelectedTournamentId(
+        route.tournamentId
+      );
 
-      if (pathname === '/admin') {
-        return;
-      }
+      setSelectedPlayerSlug(
+        route.playerSlug
+      );
 
-      setCurrentView('home');
-    }
-
-    window.addEventListener('popstate', handlePopState);
-
-    return () => {
-      window.removeEventListener('popstate', handlePopState);
-    };
-  }, []);
-
-  useEffect(() => {
-    const pathname = window.location.pathname;
-
-    if (pathname.startsWith('/torneio/')) {
-      const tournamentId = pathname.split('/torneio/')[1];
-
-      if (tournamentId) {
-        setSelectedTournamentId(tournamentId);
-        setCurrentView('tournamentDetails');
+      if (!route.playerSlug) {
+        setActivePlayer(null);
       }
     }
-  }, []);
 
-  useEffect(() => {
-    window.scrollTo(0, 0);
-  }, [currentView, selectedTournamentId]);
-
-  function openTournament(tournamentId: string) {
-    window.history.pushState(
-      {},
-      '',
-      `/torneio/${tournamentId}`
+    window.addEventListener(
+      'popstate',
+      handlePopState
     );
 
-    setSelectedTournamentId(tournamentId);
-    setCurrentView('tournamentDetails');
+    return () => {
+      window.removeEventListener(
+        'popstate',
+        handlePopState
+      );
+    };
+
+  }, []);
+
+  /* =====================================================
+     RESOLVE JOGADOR PELA URL
+  ===================================================== */
+
+  useEffect(() => {
+
+    if (!selectedPlayerSlug) {
+      setActivePlayer(null);
+      return;
+    }
+
+    const player =
+      players.find(
+        (item) =>
+          item.slug === selectedPlayerSlug
+      );
+
+    setActivePlayer(player || null);
+
+  }, [
+    selectedPlayerSlug,
+    players,
+  ]);
+
+  /* =====================================================
+     SCROLL TO TOP
+  ===================================================== */
+
+  useEffect(() => {
+    window.scrollTo({
+      top: 0,
+      behavior: 'instant',
+    });
+  }, [
+    currentView,
+    selectedTournamentId,
+    selectedPlayerSlug,
+  ]);
+
+  /* =====================================================
+     NAVEGAÇÃO
+  ===================================================== */
+
+  function openTournament(
+    tournamentId: string
+  ) {
+    navigateTo(
+      `/torneio/${tournamentId}`
+    );
   }
 
   function backToTournaments() {
-    window.history.pushState({}, '', '/');
-
-    setSelectedTournamentId(null);
-    setCurrentView('tournaments');
+    navigateTo('/torneios');
   }
 
-  function openPlayerFromTournament(playerId: string) {
-    const player = players.find(
-      (item) => item.id === playerId
-    );
+  function openPlayerFromTournament(
+    playerId: string
+  ) {
+
+    const player =
+      players.find(
+        (item) =>
+          item.id === playerId
+      );
 
     if (!player) {
       return;
     }
 
-    window.history.pushState({}, '', '/');
-
-    setActivePlayer(player);
-    setCurrentView('playerDetails');
+    navigateTo(
+      `/jogador/${player.slug}`
+    );
   }
 
-  /* Área administrativa */
+  /* =====================================================
+     ADMIN
+  ===================================================== */
+
   if (adminMode) {
 
     if (checkingAuth) {
@@ -1779,7 +2379,9 @@ export default function App() {
       return (
         <AdminLogin
           onLogin={async () => {
-            const currentUser = await getCurrentUser();
+            const currentUser =
+              await getCurrentUser();
+
             setUser(currentUser);
           }}
         />
@@ -1795,79 +2397,104 @@ export default function App() {
     );
   }
 
-  /* Site público */
+  /* =====================================================
+     SITE PÚBLICO
+  ===================================================== */
+
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-200 font-sans selection:bg-orange-500/30">
 
       <Header
         currentView={currentView}
-        setView={setCurrentView}
       />
 
       <main className="min-h-[calc(100vh-160px)]">
 
+        {/* HOME */}
         {currentView === 'home' && (
           <HomeView
-            setView={setCurrentView}
-            playerCount={players.length}
+            playerCount={
+              players.length
+            }
           />
         )}
 
+        {/* EQUIPE */}
         {currentView === 'team' && (
           <TeamView
             players={players}
             loading={playersLoading}
-            setView={setCurrentView}
-            setActivePlayer={setActivePlayer}
           />
         )}
 
+        {/* JOGADOR */}
         {currentView === 'playerDetails' && (
           <PlayerView
             player={activePlayer}
-            setView={setCurrentView}
-            onOpenTournament={openTournament}
+            onOpenTournament={
+              openTournament
+            }
           />
         )}
 
+        {/* JOGOS */}
         {currentView === 'games' && (
           <GamesView
             players={players}
             loading={playersLoading}
-            setView={setCurrentView}
-            setActivePlayer={setActivePlayer}
           />
         )}
 
+        {/* TORNEIOS */}
         {currentView === 'tournaments' && (
           <TournamentsView
-            onOpenTournament={openTournament}
+            onOpenTournament={
+              openTournament
+            }
           />
         )}
 
-        {currentView === 'tournamentDetails' &&
+        {/* DETALHES DO TORNEIO */}
+        {currentView ===
+          'tournamentDetails' &&
           selectedTournamentId && (
             <TournamentDetailsView
-              tournamentId={selectedTournamentId}
-              onBack={backToTournaments}
-              onOpenPlayer={openPlayerFromTournament}
+              tournamentId={
+                selectedTournamentId
+              }
+              onBack={
+                backToTournaments
+              }
+              onOpenPlayer={
+                openPlayerFromTournament
+              }
             />
           )}
 
+        {/* HISTÓRIA */}
         {currentView === 'history' && (
           <HistoryView />
         )}
 
+        {/* NOTÍCIAS */}
         {currentView === 'news' && (
           <NewsView />
         )}
 
       </main>
 
+      {/* FOOTER */}
       <footer className="border-t border-neutral-900 bg-neutral-950 py-8 mt-12">
+
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row justify-between items-center gap-4">
 
-          <div className="flex items-center gap-2 opacity-50 grayscale">
+          <button
+            type="button"
+            onClick={() =>
+              navigateTo('/')
+            }
+            className="flex items-center gap-2 opacity-50 grayscale hover:opacity-100 hover:grayscale-0 transition-all"
+          >
             <img
               src="/toregafoto.png"
               alt="Logo do Torega"
@@ -1877,13 +2504,14 @@ export default function App() {
             <span className="font-black text-white tracking-widest uppercase text-sm">
               Torega TCG
             </span>
-          </div>
+          </button>
 
           <p className="text-neutral-600 text-sm font-bold uppercase tracking-wider">
             © {new Date().getFullYear()} Torega TCG. Forjado na Competição.
           </p>
 
         </div>
+
       </footer>
 
     </div>
