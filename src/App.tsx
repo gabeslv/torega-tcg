@@ -2,7 +2,12 @@ import React, { useState, useEffect, useMemo } from 'react';
 import AdminLogin from './AdminLogin';
 import AdminPanel from './AdminPanel';
 import { getCurrentUser } from './lib/auth';
-import { getPlayers, PublicPlayer } from './lib/players';
+import {
+  getPlayers,
+  getPlayerStats,
+  PublicPlayer,
+  PlayerStats,
+} from './lib/players';
 import { supabase } from './lib/supabase';
 import {
   ChevronRight,
@@ -545,14 +550,14 @@ const PlayerView = ({
   const [activeTab, setActiveTab] = useState('history');
 
   const [playerDecks, setPlayerDecks] = useState<any[]>([]);
-  const [playerTournaments, setPlayerTournaments] = useState<any[]>([]);
+  const [playerStats, setPlayerStats] = useState<PlayerStats | null>(null);
   const [loadingData, setLoadingData] = useState(true);
   const [decklistImage, setDecklistImage] = useState<string | null>(null);
 
   useEffect(() => {
     if (!player?.id) {
       setPlayerDecks([]);
-      setPlayerTournaments([]);
+      setPlayerStats(null);
       setLoadingData(false);
       return;
     }
@@ -560,127 +565,61 @@ const PlayerView = ({
     async function loadPlayerData() {
       setLoadingData(true);
 
-      /* Decks */
-      const { data: decksData } = await supabase
-        .from('decks')
-        .select(`
-          id,
-          name,
-          format,
-          image_url,
-          decklist_image_url,
-          game:games(name)
-        `)
-        .eq('player_id', player!.id);
+      try {
+        /* ======================================================
+         * DECKS
+         * ====================================================== */
 
-      const normalizedDecks = (decksData || []).map((deck: any) => ({
-        ...deck,
-        game: Array.isArray(deck.game)
-          ? deck.game[0]
-          : deck.game,
-      }));
-
-      setPlayerDecks(normalizedDecks);
-
-      /* Torneios */
-      const { data: tournamentsData } = await supabase
-        .from('tournament_players')
-        .select(`
-          id,
-          placement,
-          wins,
-          losses,
-          tournament:tournaments(
+        const { data: decksData, error: decksError } = await supabase
+          .from('decks')
+          .select(`
             id,
             name,
-            tournament_date,
+            format,
             image_url,
-            status,
+            decklist_image_url,
             game:games(name)
-          ),
-          deck:decks(name)
-        `)
-        .eq('player_id', player!.id);
+          `)
+          .eq('player_id', player!.id);
 
-      const normalizedTournaments = (tournamentsData || [])
-        .map((tp: any) => {
-          const tournament = Array.isArray(tp.tournament)
-            ? tp.tournament[0]
-            : tp.tournament;
+        if (decksError) {
+          console.error(
+            'Erro ao carregar decks do jogador:',
+            decksError
+          );
+        }
 
-          const deck = Array.isArray(tp.deck)
-            ? tp.deck[0]
-            : tp.deck;
+        const normalizedDecks = (decksData || []).map((deck: any) => ({
+          ...deck,
+          game: Array.isArray(deck.game)
+            ? deck.game[0]
+            : deck.game,
+        }));
 
-          if (tournament) {
-            tournament.game = Array.isArray(tournament.game)
-              ? tournament.game[0]
-              : tournament.game;
-          }
+        setPlayerDecks(normalizedDecks);
 
-          return {
-            ...tp,
-            tournament,
-            deck,
-          };
-        })
-        .filter(
-          (tp: any) =>
-            tp.tournament &&
-            tp.tournament.status === 'approved'
+        /* ======================================================
+         * ESTATÍSTICAS
+         * ====================================================== */
+
+        const stats = await getPlayerStats(player!.id);
+
+        setPlayerStats(stats);
+      } catch (error) {
+        console.error(
+          'Erro ao carregar dados do jogador:',
+          error
         );
 
-      normalizedTournaments.sort(
-        (a, b) =>
-          new Date(
-            b.tournament.tournament_date
-          ).getTime() -
-          new Date(
-            a.tournament.tournament_date
-          ).getTime()
-      );
-
-      setPlayerTournaments(normalizedTournaments);
-      setLoadingData(false);
+        setPlayerDecks([]);
+        setPlayerStats(null);
+      } finally {
+        setLoadingData(false);
+      }
     }
 
     loadPlayerData();
   }, [player?.id]);
-
-  const stats = useMemo(() => {
-    let totalWins = 0;
-    let totalLosses = 0;
-    let bestPlacement: number | null = null;
-
-    playerTournaments.forEach((tp) => {
-      totalWins += tp.wins || 0;
-      totalLosses += tp.losses || 0;
-
-      if (tp.placement) {
-        if (
-          bestPlacement === null ||
-          tp.placement < bestPlacement
-        ) {
-          bestPlacement = tp.placement;
-        }
-      }
-    });
-
-    const totalMatches = totalWins + totalLosses;
-
-    const winRate =
-      totalMatches > 0
-        ? Math.round((totalWins / totalMatches) * 100)
-        : 0;
-
-    return {
-      totalTournaments: playerTournaments.length,
-      totalWins,
-      totalLosses,
-      winRate,
-      bestPlacement,
-    };
-  }, [playerTournaments]);
 
   if (!player) {
     return (
@@ -694,8 +633,21 @@ const PlayerView = ({
     );
   }
 
+  const tournamentsHistory =
+    playerStats?.tournamentsHistory || [];
+
+  const matchesHistory =
+    playerStats?.matchesHistory || [];
+
+  const gameStats =
+    playerStats?.games || [];
+
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+
+      {/* ======================================================
+       * VOLTAR
+       * ====================================================== */}
 
       <button
         onClick={() => navigateTo('/jogadores')}
@@ -704,6 +656,10 @@ const PlayerView = ({
         <ArrowLeft className="w-4 h-4" />
         Voltar para a Equipe
       </button>
+
+      {/* ======================================================
+       * CABEÇALHO DO JOGADOR
+       * ====================================================== */}
 
       <div className="bg-neutral-900 border border-neutral-800 p-8 md:p-12 mb-12 flex flex-col md:flex-row items-center md:items-end gap-8">
 
@@ -720,6 +676,7 @@ const PlayerView = ({
         </div>
 
         <div className="flex-grow text-center md:text-left">
+
           <h1 className="text-4xl md:text-6xl font-black text-white uppercase italic tracking-tighter mb-4">
             {player.name}
           </h1>
@@ -740,10 +697,16 @@ const PlayerView = ({
               </span>
             ))}
           </div>
+
         </div>
       </div>
 
+      {/* ======================================================
+       * ABAS
+       * ====================================================== */}
+
       <div className="flex border-b border-neutral-800 mb-8 overflow-x-auto">
+
         {['history', 'decks', 'stats'].map((tab) => (
           <button
             key={tab}
@@ -761,7 +724,12 @@ const PlayerView = ({
               : 'Estatísticas'}
           </button>
         ))}
+
       </div>
+
+      {/* ======================================================
+       * CONTEÚDO
+       * ====================================================== */}
 
       <div className="animate-fade-in">
 
@@ -771,10 +739,12 @@ const PlayerView = ({
           </div>
         ) : (
           <>
+            {/* ==================================================
+             * HISTÓRICO
+             * ================================================== */}
 
-            {/* HISTÓRICO */}
             {activeTab === 'history' && (
-              playerTournaments.length === 0 ? (
+              tournamentsHistory.length === 0 ? (
                 <EmptyState
                   icon={Trophy}
                   title="Histórico de Torneios"
@@ -782,73 +752,96 @@ const PlayerView = ({
                 />
               ) : (
                 <div className="space-y-4">
-                  {playerTournaments.map((tp) => (
+
+                  {tournamentsHistory.map((tournament: PlayerStats['tournamentsHistory'][number]) => (
                     <div
-                      key={tp.id}
+                      key={tournament.id}
                       className="bg-neutral-900 border border-neutral-800 p-5 md:p-6 flex flex-col md:flex-row items-center gap-6 hover:border-orange-500/50 transition-colors"
                     >
+
                       <div className="w-16 h-16 bg-neutral-800 border border-neutral-700 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                        {tp.tournament.image_url ? (
+
+                        {tournament.deckImageUrl ? (
                           <img
-                            src={tp.tournament.image_url}
-                            alt={tp.tournament.name}
+                            src={tournament.deckImageUrl}
+                            alt={
+                              tournament.deckName ||
+                              tournament.tournamentName
+                            }
                             className="w-full h-full object-cover"
                           />
                         ) : (
                           <Trophy className="w-6 h-6 text-neutral-600" />
                         )}
+
                       </div>
 
                       <div className="flex-1 text-center md:text-left">
+
                         <h4 className="text-lg font-bold text-white uppercase tracking-wider">
-                          {tp.tournament.name}
+                          {tournament.tournamentName}
                         </h4>
 
                         <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-2 text-xs text-neutral-500 uppercase tracking-widest">
-                          {tp.tournament.game?.name && (
-                            <span className="text-orange-500">
-                              {tp.tournament.game.name}
+
+                          <span className="text-orange-500">
+                            {tournament.gameName}
+                          </span>
+
+                          <span>•</span>
+
+                          {tournament.tournamentDate && (
+                            <span>
+                              {new Date(
+                                `${tournament.tournamentDate}T12:00:00`
+                              ).toLocaleDateString('pt-BR')}
                             </span>
                           )}
 
-                          {tp.tournament.game?.name && (
-                            <span>•</span>
-                          )}
-
-                          <span>
-                            {new Date(
-                              `${tp.tournament.tournament_date}T12:00:00`
-                            ).toLocaleDateString('pt-BR')}
-                          </span>
-
-                          {tp.deck?.name && (
+                          {tournament.location && (
                             <>
                               <span>•</span>
                               <span>
-                                Deck: {tp.deck.name}
+                                {tournament.location}
                               </span>
                             </>
                           )}
+
+                          {tournament.deckName && (
+                            <>
+                              <span>•</span>
+                              <span>
+                                Deck: {tournament.deckName}
+                              </span>
+                            </>
+                          )}
+
                         </div>
+
                       </div>
 
                       <div className="flex items-center gap-6 my-4 md:my-0">
+
                         <div className="text-center min-w-[60px]">
+
                           <span className="block text-2xl font-black italic text-white">
-                            {tp.placement
-                              ? `${tp.placement}º`
+                            {tournament.placement
+                              ? `${tournament.placement}º`
                               : '-'}
                           </span>
 
                           <span className="text-[10px] uppercase tracking-widest text-neutral-600">
                             Posição
                           </span>
+
                         </div>
 
                         <div className="text-center min-w-[60px]">
+
                           <span className="block text-lg font-bold">
+
                             <span className="text-green-400">
-                              {tp.wins}V
+                              {tournament.wins}V
                             </span>
 
                             <span className="text-neutral-700 mx-1">
@@ -856,33 +849,41 @@ const PlayerView = ({
                             </span>
 
                             <span className="text-red-400">
-                              {tp.losses}D
+                              {tournament.losses}D
                             </span>
+
                           </span>
 
                           <span className="text-[10px] uppercase tracking-widest text-neutral-600">
                             Placar
                           </span>
+
                         </div>
+
                       </div>
 
                       <button
                         onClick={() =>
                           onOpenTournament(
-                            tp.tournament.id
+                            tournament.tournamentId
                           )
                         }
                         className="w-full md:w-auto px-6 py-3 border border-neutral-800 text-neutral-400 hover:text-orange-500 hover:border-orange-500/50 text-xs font-bold uppercase tracking-widest transition-colors"
                       >
                         Ver Torneio
                       </button>
+
                     </div>
                   ))}
+
                 </div>
               )
             )}
 
-            {/* DECKS */}
+            {/* ==================================================
+             * DECKS
+             * ================================================== */}
+
             {activeTab === 'decks' && (
               playerDecks.length === 0 ? (
                 <EmptyState
@@ -892,13 +893,17 @@ const PlayerView = ({
                 />
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+
                   {playerDecks.map((deck) => (
                     <div
                       key={deck.id}
                       className="bg-neutral-900 border border-neutral-800 p-6 hover:border-orange-500 transition-colors flex flex-col h-full"
                     >
+
                       <div className="flex justify-between items-start mb-4">
+
                         <div>
+
                           <h3 className="text-xl font-bold text-white uppercase tracking-wider">
                             {deck.name}
                           </h3>
@@ -906,9 +911,11 @@ const PlayerView = ({
                           <p className="text-sm text-neutral-500 mt-1">
                             {deck.game?.name || 'TCG'}
                           </p>
+
                         </div>
 
                         <Layers className="text-neutral-600 w-6 h-6 flex-shrink-0" />
+
                       </div>
 
                       {deck.format && (
@@ -920,6 +927,7 @@ const PlayerView = ({
                       )}
 
                       <div className="mt-auto pt-4">
+
                         {deck.decklist_image_url ? (
                           <button
                             onClick={() =>
@@ -937,75 +945,405 @@ const PlayerView = ({
                             Lista não enviada
                           </div>
                         )}
+
                       </div>
+
                     </div>
                   ))}
+
                 </div>
               )
             )}
 
-            {/* ESTATÍSTICAS */}
+            {/* ==================================================
+             * ESTATÍSTICAS
+             * ================================================== */}
+
             {activeTab === 'stats' && (
-              playerTournaments.length === 0 ? (
+              !playerStats || playerStats.tournaments === 0 ? (
                 <EmptyState
                   icon={Gamepad2}
                   title="Estatísticas do Jogador"
                   message="Nenhuma estatística competitiva cadastrada ainda."
                 />
               ) : (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                <div className="space-y-10">
 
-                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-white italic">
-                      {stats.totalTournaments}
-                    </p>
+                  {/* ============================================
+                   * PRINCIPAIS NÚMEROS
+                   * ============================================ */}
 
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
-                      Torneios Disputados
-                    </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
+
+                      <p className="text-3xl md:text-4xl font-black text-white italic">
+                        {playerStats.tournaments}
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Torneios
+                      </p>
+
+                    </div>
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
+
+                      <p className="text-3xl md:text-4xl font-black text-orange-500 italic">
+                        {playerStats.titles}
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Títulos
+                      </p>
+
+                    </div>
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
+
+                      <p className="text-3xl md:text-4xl font-black text-white italic">
+                        {playerStats.top4}
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Top 4
+                      </p>
+
+                    </div>
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
+
+                      <p className="text-3xl md:text-4xl font-black text-white italic">
+                        {playerStats.top8}
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Top 8
+                      </p>
+
+                    </div>
+
                   </div>
 
-                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-orange-500 italic">
-                      {stats.winRate}%
-                    </p>
+                  {/* ============================================
+                   * PARTIDAS
+                   * ============================================ */}
 
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
-                      Taxa de Vitória
-                    </p>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center">
+
+                      <p className="text-3xl md:text-4xl font-black text-orange-500 italic">
+                        {Math.round(
+                          playerStats.winRate
+                        )}%
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Taxa de Vitória
+                      </p>
+
+                    </div>
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center">
+
+                      <p className="text-3xl md:text-4xl font-black text-white italic">
+
+                        <span className="text-green-400">
+                          {playerStats.wins}
+                        </span>
+
+                        <span className="text-neutral-700 mx-1">
+                          -
+                        </span>
+
+                        <span className="text-red-400">
+                          {playerStats.losses}
+                        </span>
+
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Vitórias / Derrotas
+                      </p>
+
+                    </div>
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center">
+
+                      <p className="text-3xl md:text-4xl font-black text-neutral-300 italic">
+                        {playerStats.draws}
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Empates
+                      </p>
+
+                    </div>
+
+                    <div className="bg-neutral-900 border border-neutral-800 p-6 text-center">
+
+                      <p className="text-3xl md:text-4xl font-black text-neutral-300 italic">
+                        {playerStats.bestPlacement
+                          ? `${playerStats.bestPlacement}º`
+                          : '-'}
+                      </p>
+
+                      <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
+                        Melhor Colocação
+                      </p>
+
+                    </div>
+
                   </div>
 
-                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-white italic">
-                      <span className="text-green-400">
-                        {stats.totalWins}
-                      </span>
+                  {/* ============================================
+                   * DESEMPENHO POR JOGO
+                   * ============================================ */}
 
-                      <span className="text-neutral-700 mx-1">
-                        -
-                      </span>
+                  {gameStats.length > 0 && (
+                    <div>
 
-                      <span className="text-red-400">
-                        {stats.totalLosses}
-                      </span>
-                    </p>
+                      <div className="mb-5">
 
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
-                      Vitórias / Derrotas
-                    </p>
-                  </div>
+                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tight">
+                          Desempenho por Jogo
+                        </h2>
 
-                  <div className="bg-neutral-900 border border-neutral-800 p-6 text-center hover:border-orange-500/30 transition-colors">
-                    <p className="text-3xl md:text-4xl font-black text-neutral-300 italic">
-                      {stats.bestPlacement
-                        ? `${stats.bestPlacement}º`
-                        : '-'}
-                    </p>
+                        <p className="text-sm text-neutral-500 mt-1">
+                          Histórico competitivo separado por TCG.
+                        </p>
 
-                    <p className="text-[10px] md:text-xs text-neutral-500 uppercase tracking-widest mt-2">
-                      Melhor Colocação
-                    </p>
-                  </div>
+                      </div>
+
+                      <div className="space-y-4">
+
+                        {gameStats.map((game: PlayerStats['games'][number]) => (
+                          <div
+                            key={game.gameName}
+                            className="bg-neutral-900 border border-neutral-800 p-6"
+                          >
+
+                            <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+
+                              <div className="lg:w-48 flex-shrink-0">
+
+                                <h3 className="text-xl font-black text-white uppercase italic">
+                                  {game.gameName}
+                                </h3>
+
+                                <p className="text-xs text-neutral-500 uppercase tracking-widest mt-1">
+                                  {game.tournaments}{' '}
+                                  {game.tournaments === 1
+                                    ? 'torneio'
+                                    : 'torneios'}
+                                </p>
+
+                              </div>
+
+                              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 flex-1">
+
+                                <div>
+                                  <p className="text-xl font-black text-orange-500">
+                                    {Math.round(
+                                      game.winRate
+                                    )}%
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Win Rate
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xl font-black text-green-400">
+                                    {game.wins}
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Vitórias
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xl font-black text-red-400">
+                                    {game.losses}
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Derrotas
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xl font-black text-neutral-300">
+                                    {game.draws}
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Empates
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xl font-black text-white">
+                                    {game.titles}
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Títulos
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xl font-black text-white">
+                                    {game.top4}
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Top 4
+                                  </p>
+                                </div>
+
+                                <div>
+                                  <p className="text-xl font-black text-white">
+                                    {game.bestPlacement
+                                      ? `${game.bestPlacement}º`
+                                      : '-'}
+                                  </p>
+
+                                  <p className="text-[9px] text-neutral-600 uppercase tracking-widest">
+                                    Melhor
+                                  </p>
+                                </div>
+
+                              </div>
+
+                            </div>
+
+                          </div>
+                        ))}
+
+                      </div>
+
+                    </div>
+                  )}
+
+                  {/* ============================================
+                   * HISTÓRICO DE PARTIDAS
+                   * ============================================ */}
+
+                  {matchesHistory.length > 0 && (
+                    <div>
+
+                      <div className="mb-5">
+
+                        <h2 className="text-2xl font-black text-white uppercase italic tracking-tight">
+                          Histórico de Partidas
+                        </h2>
+
+                        <p className="text-sm text-neutral-500 mt-1">
+                          Partidas registradas em torneios oficiais.
+                        </p>
+
+                      </div>
+
+                      <div className="space-y-3">
+
+                        {matchesHistory.map((match: PlayerStats['matchesHistory'][number]) => (
+                          <div
+                            key={match.id}
+                            className="bg-neutral-900 border border-neutral-800 p-5"
+                          >
+
+                            <div className="flex flex-col md:flex-row md:items-center gap-4">
+
+                              <div className="md:w-32 flex-shrink-0">
+
+                                <span className="text-[10px] text-neutral-600 uppercase tracking-widest">
+                                  Rodada {match.round}
+                                </span>
+
+                                <p className="text-xs text-orange-500 uppercase tracking-wider mt-1">
+                                  {match.gameName}
+                                </p>
+
+                              </div>
+
+                              <div className="flex-1">
+
+                                <p className="text-sm text-neutral-500 uppercase tracking-widest">
+                                  {match.tournamentName}
+                                </p>
+
+                                <p className="text-white font-bold uppercase mt-1">
+                                  vs. {match.opponentName}
+                                </p>
+
+                                {match.opponentDeck && (
+                                  <p className="text-xs text-neutral-600 mt-1">
+                                    Deck adversário:{' '}
+                                    {match.opponentDeck}
+                                  </p>
+                                )}
+
+                              </div>
+
+                              <div className="flex items-center gap-5">
+
+                                <div className="text-center">
+
+                                  <p
+                                    className={`text-lg font-black uppercase ${
+                                      match.result === 'win'
+                                        ? 'text-green-400'
+                                        : match.result === 'loss'
+                                        ? 'text-red-400'
+                                        : 'text-neutral-300'
+                                    }`}
+                                  >
+                                    {match.result === 'win'
+                                      ? 'VITÓRIA'
+                                      : match.result === 'loss'
+                                      ? 'DERROTA'
+                                      : 'EMPATE'}
+                                  </p>
+
+                                  <p className="text-[10px] text-neutral-600 uppercase tracking-widest">
+                                    Resultado
+                                  </p>
+
+                                </div>
+
+                                <div className="text-center min-w-[70px]">
+
+                                  <p className="text-xl font-black text-white">
+                                    {match.playerScore}
+
+                                    <span className="text-neutral-700 mx-1">
+                                      -
+                                    </span>
+
+                                    {match.opponentScore}
+                                  </p>
+
+                                  <p className="text-[10px] text-neutral-600 uppercase tracking-widest">
+                                    Placar
+                                  </p>
+
+                                </div>
+
+                              </div>
+
+                            </div>
+
+                          </div>
+                        ))}
+
+                      </div>
+
+                    </div>
+                  )}
 
                 </div>
               )
@@ -1013,20 +1351,26 @@ const PlayerView = ({
 
           </>
         )}
+
       </div>
 
-      {/* Modal decklist */}
+      {/* ======================================================
+       * MODAL DECKLIST
+       * ====================================================== */}
+
       {decklistImage && (
         <div
           className="fixed inset-0 z-[100] bg-black/90 backdrop-blur-sm flex items-center justify-center p-4"
           onClick={() => setDecklistImage(null)}
         >
+
           <div
             className="relative max-w-5xl max-h-[90vh]"
             onClick={(event) =>
               event.stopPropagation()
             }
           >
+
             <button
               type="button"
               onClick={() =>
@@ -1043,13 +1387,15 @@ const PlayerView = ({
               alt="Decklist do Jogador"
               className="max-w-full max-h-[85vh] object-contain border border-neutral-800"
             />
+
           </div>
+
         </div>
       )}
+
     </div>
   );
 };
-
 /* =========================================================
    JOGOS
 ========================================================= */
