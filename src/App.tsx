@@ -414,7 +414,7 @@ const PlayerView = ({
   const [loadingData, setLoadingData] = useState(true);
   const [decklistImage, setDecklistImage] = useState<string | null>(null);
 
-  useEffect(() => {
+useEffect(() => {
     if (!player?.id) return;
 
     async function loadPlayerData() {
@@ -431,7 +431,7 @@ const PlayerView = ({
           decklist_image_url,
           game:games(name)
         `)
-        .eq('player_id', player.id);
+        .eq('player_id', player!.id); // Usando '!' após verificar se player?.id existe
 
       const normalizedDecks = (decksData || []).map((deck: any) => ({
         ...deck,
@@ -458,7 +458,7 @@ const PlayerView = ({
           ),
           deck:decks(name)
         `)
-        .eq('player_id', player.id);
+        .eq('player_id', player!.id);
 
       // Normalizar e filtrar apenas os torneios "aprovados" (públicos)
       const normalizedTournaments = (tournamentsData || [])
